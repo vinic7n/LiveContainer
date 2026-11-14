@@ -463,7 +463,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 18)], spacing: 14) {
                 ForEach(apps, id: \.self) { app in
                     LCAppBanner(appModel: app, delegate: self, isGrid: true)
-                        .id(appListGrid)
                         .transition(.scale)
                 }
             }
@@ -472,7 +471,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             LazyVStack {
                 ForEach(apps, id: \.self) { app in
                     LCAppBanner(appModel: app, delegate: self)
-                        .id(appListGrid)
                         .transition(.scale)
                 }
             }
