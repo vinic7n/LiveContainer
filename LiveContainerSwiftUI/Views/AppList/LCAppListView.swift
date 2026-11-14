@@ -1260,7 +1260,11 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
     
     func openNavigationView(view: AnyView) {
-        navigateTo = AnyView(view.toolbar(.visible, for: .navigationBar))
+        if #available(iOS 16.0, *) {
+            navigateTo = AnyView(view.toolbar(.visible, for: .navigationBar))
+        } else {
+            navigateTo = view
+        }
         isNavigationActive = true
     }
     
