@@ -8,7 +8,7 @@ import UIKit
 
 final class LCAppBannerRootView: UIView {
     static let bannerHeight: CGFloat = 88
-    static let gridBannerHeight: CGFloat = 190
+    static let gridBannerHeight: CGFloat = 116
     private let isGrid: Bool
 
     let runControl = LCAppBannerRunControl()
@@ -46,7 +46,7 @@ final class LCAppBannerRootView: UIView {
     private func setupView() {
         isOpaque = false
         backgroundColor = .clear
-        layer.cornerRadius = 22
+        layer.cornerRadius = isGrid ? 18 : 22
         layer.cornerCurve = .continuous
         clipsToBounds = true
 
@@ -56,7 +56,7 @@ final class LCAppBannerRootView: UIView {
 
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
         iconImageView.contentMode = .scaleAspectFit
-        iconImageView.layer.cornerRadius = 16
+        iconImageView.layer.cornerRadius = isGrid ? 19 : 16
         iconImageView.layer.cornerCurve = .continuous
         iconImageView.clipsToBounds = true
         iconImageView.isAccessibilityElement = false
@@ -87,9 +87,11 @@ final class LCAppBannerRootView: UIView {
         detailStack.distribution = .fill
         detailStack.spacing = 1
         detailStack.addArrangedSubview(nameStack)
-        detailStack.addArrangedSubview(versionLabel)
-        detailStack.addArrangedSubview(remarkLabel)
-        detailStack.addArrangedSubview(containerLabel)
+        if !isGrid {
+            detailStack.addArrangedSubview(versionLabel)
+            detailStack.addArrangedSubview(remarkLabel)
+            detailStack.addArrangedSubview(containerLabel)
+        }
         detailStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         detailStack.isAccessibilityElement = true
 
@@ -105,23 +107,29 @@ final class LCAppBannerRootView: UIView {
             visualBackgroundView.topAnchor.constraint(equalTo: topAnchor),
             visualBackgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            iconImageView.widthAnchor.constraint(equalToConstant: 60),
-            iconImageView.heightAnchor.constraint(equalToConstant: 60),
+            iconImageView.widthAnchor.constraint(equalToConstant: isGrid ? 68 : 60),
+            iconImageView.heightAnchor.constraint(equalToConstant: isGrid ? 68 : 60),
             runControl.widthAnchor.constraint(equalToConstant: 70),
             runControl.heightAnchor.constraint(equalToConstant: 32)
         ]
         if isGrid {
             nameStack.alignment = .center
             detailStack.alignment = .center
+            nameLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            nameLabel.textAlignment = .center
+            nameLabel.numberOfLines = 2
+            nameStack.spacing = 0
+            nameSpacer.isHidden = true
+            [sharedBadge, jitBadge, bit32Badge, lockBadge].forEach { $0.isHidden = true }
+            runControl.isHidden = true
+            visualBackgroundView.backgroundColor = .clear
             constraints += [
-                iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+                iconImageView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
                 iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
-                detailStack.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 8),
-                detailStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-                detailStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-                detailStack.bottomAnchor.constraint(lessThanOrEqualTo: runControl.topAnchor, constant: -6),
-                runControl.centerXAnchor.constraint(equalTo: centerXAnchor),
-                runControl.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10)
+                detailStack.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 5),
+                detailStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+                detailStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+                detailStack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -2)
             ]
         } else {
             constraints += [
@@ -176,9 +184,9 @@ final class LCAppBannerRootView: UIView {
         bit32Badge.isHidden = !model.uiIs32bit
         bit32Badge.backgroundColor = UIColor(named: "32BitBadgeColor") ?? .systemBlue
 
-        visualBackgroundView.backgroundColor = dynamicColors
+        visualBackgroundView.backgroundColor = isGrid ? .clear : (dynamicColors
             ? mainColor.withAlphaComponent(0.5)
-            : (UIColor(named: "AppBannerBG") ?? .secondarySystemBackground)
+            : (UIColor(named: "AppBannerBG") ?? .secondarySystemBackground))
         runControl.update(
             color: accentColor,
             isSigning: model.isSigningInProgress,
