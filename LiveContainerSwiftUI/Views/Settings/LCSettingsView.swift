@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import PhotosUI
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -59,7 +58,7 @@ struct LCSettingsView: View {
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
-    @State private var selectedHomeScreenWallpaper: PhotosPickerItem?
+    @State private var showHomeScreenWallpaperPicker = false
     @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
     
     @AppStorage("LCSideJITServerAddress", store: LCUtils.appGroupUserDefault) var sideJITServerAddress : String = ""
@@ -213,7 +212,9 @@ struct LCSettingsView: View {
                     Toggle(isOn: $appListGrid) {
                         Text("lc.theme.homeScreenLayout".loc)
                     }
-                    PhotosPicker(selection: $selectedHomeScreenWallpaper, matching: .images, photoLibrary: .shared()) {
+                    Button {
+                        showHomeScreenWallpaperPicker = true
+                    } label: {
                         Label("lc.theme.chooseWallpaper".loc, systemImage: "photo")
                     }
                     if homeScreenWallpaperConfigured {
@@ -476,25 +477,11 @@ struct LCSettingsView: View {
                     certificateImportPasswordAlert.show = false
                 }
             )
-            .onChange(of: selectedHomeScreenWallpaper) { item in
-                guard let item else { return }
-                Task {
-                    guard let data = try? await item.loadTransferable(type: Data.self),
-                          let image = UIImage(data: data),
-                          let jpegData = image.jpegData(compressionQuality: 0.88) else { return }
-                    do {
-                        try FileManager.default.createDirectory(
-                            at: LCPath.lcGroupDocPath,
-                            withIntermediateDirectories: true
-                        )
-                        try jpegData.write(to: LCTheme.homeScreenWallpaperURL, options: .atomic)
-                        homeScreenWallpaperConfigured = true
-                        wallpaperRevision += 1
-                    } catch {
-                        errorInfo = error.localizedDescription
-                        errorShow = true
-                    }
-                }
+            .sheet(isPresented: $showHomeScreenWallpaperPicker) {
+                LCHomeScreenWallpaperPicker(
+                    onSelect: saveHomeScreenWallpaper,
+                    onCancel: {}
+                )
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -515,6 +502,22 @@ struct LCSettingsView: View {
     
     func openGitHub() {
         UIApplication.shared.open(URL(string: "https://github.com/LiveContainer/LiveContainer")!)
+    }
+
+    private func saveHomeScreenWallpaper(_ image: UIImage) {
+        guard let jpegData = image.jpegData(compressionQuality: 0.88) else { return }
+        do {
+            try FileManager.default.createDirectory(
+                at: LCPath.lcGroupDocPath,
+                withIntermediateDirectories: true
+            )
+            try jpegData.write(to: LCTheme.homeScreenWallpaperURL, options: .atomic)
+            homeScreenWallpaperConfigured = true
+            wallpaperRevision += 1
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
     }
     
     func openGitHub2() {

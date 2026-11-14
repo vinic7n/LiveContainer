@@ -6,10 +6,24 @@
 //
 
 import Combine
-import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+
+private struct LCAppGridToolbarVisibility: ViewModifier {
+    let isGrid: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content
+                .toolbar(isGrid ? .hidden : .visible, for: .tabBar)
+                .toolbar(isGrid ? .hidden : .visible, for: .navigationBar)
+        } else {
+            content
+        }
+    }
+}
 
 class SearchContext: ObservableObject {
     @Published var query: String = ""
@@ -357,8 +371,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                 }
             }
-            .toolbar(appListGrid ? .hidden : .visible, for: .tabBar)
-            .toolbar(appListGrid ? .hidden : .visible, for: .navigationBar)
+            .modifier(LCAppGridToolbarVisibility(isGrid: appListGrid))
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .alert("lc.common.error".loc, isPresented: $errorShow){
