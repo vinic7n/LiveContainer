@@ -58,7 +58,26 @@ jobs:
           scheme: ${{ steps.scheme.outputs.scheme }}
           filetype_parameter: ${{ steps.filetype_parameter.outputs.filetype_parameter }}
           file_to_build: ${{ steps.file_to_build.outputs.file_to_build }}
-        run: xcodebuild archive -archivePath "$archive_path" -scheme "$scheme" -"$filetype_parameter" "$file_to_build" -sdk iphoneos -arch arm64 -configuration Release | xcpretty && exit ${PIPESTATUS[0]}
+        run: |
+          set +e
+          build_log="$RUNNER_TEMP/xcodebuild-archive.log"
+          xcodebuild archive -archivePath "$archive_path" -scheme "$scheme" -"$filetype_parameter" "$file_to_build" -sdk iphoneos -arch arm64 -configuration Release > "$build_log" 2>&1
+          build_status=$?
+          xcpretty < "$build_log"
+          if [ "$build_status" -ne 0 ]; then
+            echo "--- xcodebuild compiler diagnostics ---"
+            if ! grep -n -C 4 -E 'error:|SwiftCompile .*failed|ARCHIVE FAILED' "$build_log"; then
+              tail -n 160 "$build_log"
+            fi
+          fi
+          exit "$build_status"
+      - name: Upload raw xcodebuild log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcodebuild-archive-log
+          path: ${{ runner.temp }}/xcodebuild-archive.log
+          if-no-files-found: warn
       - name: Tar Build Artifact
         run: tar -cvf "$archive_path.xcarchive.tar" "$archive_path.xcarchive"
       - name: Upload a Build Artifact
