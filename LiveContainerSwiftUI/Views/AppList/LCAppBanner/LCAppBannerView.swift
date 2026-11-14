@@ -8,7 +8,7 @@ import UIKit
 
 final class LCAppBannerRootView: UIView {
     static let bannerHeight: CGFloat = 88
-    static let gridBannerHeight: CGFloat = 116
+    static let gridBannerHeight: CGFloat = 100
     private let isGrid: Bool
 
     let runControl = LCAppBannerRunControl()
@@ -107,8 +107,8 @@ final class LCAppBannerRootView: UIView {
             visualBackgroundView.topAnchor.constraint(equalTo: topAnchor),
             visualBackgroundView.bottomAnchor.constraint(equalTo: bottomAnchor),
 
-            iconImageView.widthAnchor.constraint(equalToConstant: isGrid ? 68 : 60),
-            iconImageView.heightAnchor.constraint(equalToConstant: isGrid ? 68 : 60),
+            iconImageView.widthAnchor.constraint(equalToConstant: isGrid ? 60 : 60),
+            iconImageView.heightAnchor.constraint(equalToConstant: isGrid ? 60 : 60),
             runControl.widthAnchor.constraint(equalToConstant: 70),
             runControl.heightAnchor.constraint(equalToConstant: 32)
         ]

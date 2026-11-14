@@ -100,6 +100,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @State private var homeScreenWallpaper: UIImage?
+    @State private var draggedHomeAppID: String?
+    @State private var homePageIndex = 0
+    @State private var isHomeSearchVisible = false
     
     @State private var isViewAppeared = false
     
@@ -159,8 +162,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 })
                 .hidden()
                 
-                appBannerCollection(filteredApps)
-                    .padding()
+                appBannerCollection(filteredApps, homeScreen: true)
+                    .padding(.horizontal, appListGrid ? 8 : 0)
+                    .padding(.top, appListGrid ? 4 : 0)
 
                 VStack {
                     if LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding") {
@@ -221,13 +225,15 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
 
                     let appCount = sharedModel.isHiddenAppUnlocked ? filteredApps.count + filteredHiddenApps.count : filteredApps.count
-                    Text(appCount > 0 || searchContext.debouncedQuery != "" ? "lc.appList.appCounter %lld".localizeWithFormat(appCount) : (sharedModel.multiLCStatus == 2 ? "lc.appList.convertToSharedToShowInLC2".loc : "lc.appList.installTip".loc))
-                        .padding(.horizontal)
-                        .foregroundStyle(.gray)
-                        .animation(searchContext.isTyping ? nil : .easeInOut, value: appCount)
-                        .onTapGesture(count: 3) {
-                            Task { await authenticateUser() }
-                        }
+                    if !appListGrid {
+                        Text(appCount > 0 || searchContext.debouncedQuery != "" ? "lc.appList.appCounter %lld".localizeWithFormat(appCount) : (sharedModel.multiLCStatus == 2 ? "lc.appList.convertToSharedToShowInLC2".loc : "lc.appList.installTip".loc))
+                            .padding(.horizontal)
+                            .foregroundStyle(.gray)
+                            .animation(searchContext.isTyping ? nil : .easeInOut, value: appCount)
+                            .onTapGesture(count: 3) {
+                                Task { await authenticateUser() }
+                            }
+                    }
                 }.animation(searchContext.isTyping ? nil : .easeInOut, value: LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding"))
 
                 if sharedModel.multiLCStatus == 2 {
@@ -260,23 +266,63 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if appListGrid {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            sharedModel.selectedTab = .settings
+                    VStack(spacing: 8) {
+                        if isHomeSearchVisible {
+                            HStack(spacing: 8) {
+                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                                TextField("Search", text: $searchContext.query)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                Button {
+                                    searchContext.query = ""
+                                    isHomeSearchVisible = false
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 36)
+                            .background(.ultraThinMaterial, in: Capsule())
+                            .padding(.horizontal, 54)
+                        } else {
+                            Button {
+                                isHomeSearchVisible = true
+                            } label: {
+                                Label("Search", systemImage: "magnifyingglass")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 7)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
-                    } label: {
-                        Image(systemName: "gearshape.fill")
-                            .font(.system(size: 27, weight: .semibold))
-                            .foregroundStyle(LCTheme.color(hex: themeAccentHex))
-                            .frame(width: 68, height: 58)
-                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+
+                        HStack(spacing: 7) {
+                            ForEach(0..<homePageCount, id: \.self) { page in
+                                Circle()
+                                    .fill(page == homePageIndex ? Color.white : Color.white.opacity(0.45))
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                        .accessibilityLabel("Home screen page \(homePageIndex + 1) of \(homePageCount)")
+
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                sharedModel.selectedTab = .settings
+                            }
+                        } label: {
+                            SettingsHomeIcon()
+                                .frame(width: 58, height: 58)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.top, 7)
+                    .padding(.bottom, 5)
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(.horizontal, 52)
-                    .padding(.bottom, 6)
+                    .padding(.bottom, 3)
                 }
             }
             .navigationBarProgressBar(show:$installprogressVisible, progress: $installProgressPercentage)
@@ -288,6 +334,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 loadHomeScreenWallpaper()
             }
             .onChange(of: wallpaperRevision) { _ in loadHomeScreenWallpaper() }
+            .onChange(of: searchContext.query) { _ in homePageIndex = 0 }
             
             .navigationTitle("lc.appList.myApps".loc)
             .toolbar {
@@ -523,13 +570,43 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     }
 
+    private var homePageCount: Int {
+        max(1, (filteredApps.count + 23) / 24)
+    }
+
     @ViewBuilder
-    private func appBannerCollection(_ apps: [LCAppModel]) -> some View {
+    private func appBannerCollection(_ apps: [LCAppModel], homeScreen: Bool = false) -> some View {
         if appListGrid {
-            LazyVGrid(columns: gridColumns, spacing: 10) {
-                ForEach(apps, id: \.self) { app in
-                    LCAppBanner(appModel: app, delegate: self, isGrid: true)
-                        .transition(.scale)
+            if homeScreen {
+                let pages = stride(from: 0, to: max(apps.count, 1), by: 24).map { start in
+                    Array(apps.dropFirst(start).prefix(24))
+                }
+                if apps.isEmpty {
+                    Text(sharedModel.multiLCStatus == 2 ? "lc.appList.convertToSharedToShowInLC2".loc : "lc.appList.installTip".loc)
+                        .foregroundStyle(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .frame(height: CGFloat(6) * LCAppBannerRootView.gridBannerHeight + 12)
+                } else {
+                    TabView(selection: $homePageIndex) {
+                        ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageApps in
+                            LazyVGrid(columns: gridColumns, spacing: 2) {
+                                ForEach(pageApps, id: \.self) { app in
+                                    homeAppTile(app, pageApps: sortedApps)
+                                }
+                            }
+                            .tag(pageIndex)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: CGFloat(6) * LCAppBannerRootView.gridBannerHeight + 12)
+                }
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 10) {
+                    ForEach(apps, id: \.self) { app in
+                        LCAppBanner(appModel: app, delegate: self, isGrid: true)
+                            .transition(.scale)
+                    }
                 }
             }
             .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
@@ -542,6 +619,21 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
         }
+    }
+
+    private func homeAppTile(_ app: LCAppModel, pageApps: [LCAppModel]) -> some View {
+        LCAppBanner(appModel: app, delegate: self, isGrid: true)
+            .onDrag {
+                draggedHomeAppID = sharedAppSortManager.getUniqueIdentifier(for: app)
+                return NSItemProvider(object: (draggedHomeAppID ?? "") as NSString)
+            }
+            .onDrop(of: [.text], delegate: HomeAppReorderDropDelegate(
+                app: app,
+                apps: pageApps,
+                manager: sharedAppSortManager,
+                draggedAppID: $draggedHomeAppID
+            ))
+            .transition(.scale)
     }
 
     private var gridColumns: [GridItem] {
@@ -1352,6 +1444,53 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
     }
     
+}
+
+private struct SettingsHomeIcon: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LinearGradient(colors: [Color(white: 0.88), Color(white: 0.58)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(.white.opacity(0.55), lineWidth: 1)
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 39, weight: .regular))
+                .foregroundStyle(LinearGradient(colors: [Color(white: 0.98), Color(white: 0.68)], startPoint: .top, endPoint: .bottom))
+                .shadow(color: .black.opacity(0.36), radius: 1.5, x: 0, y: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(.black.opacity(0.18), lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+        .accessibilityLabel("Ajustes")
+    }
+}
+
+private struct HomeAppReorderDropDelegate: DropDelegate {
+    let app: LCAppModel
+    let apps: [LCAppModel]
+    let manager: LCAppSortManager
+    @Binding var draggedAppID: String?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedAppID,
+              let from = apps.firstIndex(where: { manager.matches(uniqueId: draggedAppID, app: $0) }),
+              let toID = manager.getUniqueIdentifier(for: app),
+              let to = apps.firstIndex(where: { manager.matches(uniqueId: toID, app: $0) }),
+              from != to else { return }
+
+        var reordered = apps
+        let moved = reordered.remove(at: from)
+        reordered.insert(moved, at: to)
+        let visibleIDs = reordered.compactMap { manager.getUniqueIdentifier(for: $0) }
+        let otherIDs = manager.customSortOrder.filter { !visibleIDs.contains($0) }
+        manager.customSortOrder = visibleIDs + otherIDs
+        manager.appSortType = .custom
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedAppID = nil
+        return true
+    }
 }
 
 extension View {
