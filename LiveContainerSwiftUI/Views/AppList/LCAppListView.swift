@@ -86,11 +86,19 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @ObservedObject var searchContext: SearchContext = SearchContext()
     var sortedApps: [LCAppModel] {
-        return sharedAppSortManager.sortedApps
+        sharedAppSortManager.getSortedApps(
+            sharedModel.apps,
+            sortType: sharedAppSortManager.appSortType,
+            customSortOrder: sharedAppSortManager.customSortOrder
+        )
     }
     
     var sortedHiddenApps: [LCAppModel] {
-        return sharedAppSortManager.sortedHiddenApps
+        sharedAppSortManager.getSortedApps(
+            sharedModel.hiddenApps,
+            sortType: sharedAppSortManager.appSortType,
+            customSortOrder: sharedAppSortManager.customSortOrder
+        )
     }
     
     var filteredApps: [LCAppModel] {
@@ -167,7 +175,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                                 if sharedModel.isHiddenAppUnlocked {
                                     appBannerCollection(filteredHiddenApps)
                                 } else {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)], spacing: 12) {
+                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 18)], spacing: 14) {
                                         ForEach(filteredHiddenApps, id: \.self) { _ in
                                             LCAppSkeletonBanner()
                                                 .frame(height: LCAppBannerRootView.gridBannerHeight)
@@ -452,7 +460,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @ViewBuilder
     private func appBannerCollection(_ apps: [LCAppModel]) -> some View {
         if appListGrid {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 18)], spacing: 14) {
                 ForEach(apps, id: \.self) { app in
                     LCAppBanner(appModel: app, delegate: self, isGrid: true)
                         .id(appListGrid)

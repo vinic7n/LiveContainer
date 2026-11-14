@@ -44,10 +44,10 @@ final class LCAppBannerViewController: UIViewController, UIContextMenuInteractio
         bannerView.runControl.addTarget(self, action: #selector(runButtonTapped), for: .touchUpInside)
         bannerView.addInteraction(UIContextMenuInteraction(delegate: self))
 
-        let doubleTapGesture = UITapGestureRecognizer(target: self, action: #selector(bannerDoubleTapped))
-        doubleTapGesture.numberOfTapsRequired = 2
-        doubleTapGesture.cancelsTouchesInView = false
-        bannerView.addGestureRecognizer(doubleTapGesture)
+        let appTapGesture = UITapGestureRecognizer(target: self, action: #selector(bannerTapped))
+        appTapGesture.numberOfTapsRequired = configuration.isGrid ? 1 : 2
+        appTapGesture.cancelsTouchesInView = false
+        bannerView.addGestureRecognizer(appTapGesture)
     }
 
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
@@ -87,12 +87,16 @@ final class LCAppBannerViewController: UIViewController, UIContextMenuInteractio
         )
     }
 
-    @objc private func bannerDoubleTapped(_ gestureRecognizer: UITapGestureRecognizer) {
+    @objc private func bannerTapped(_ gestureRecognizer: UITapGestureRecognizer) {
         let location = gestureRecognizer.location(in: bannerView.runControl)
-        guard !bannerView.runControl.bounds.contains(location) else {
+        guard configuration.isGrid || !bannerView.runControl.bounds.contains(location) else {
             return
         }
-        openSettings()
+        if configuration.isGrid {
+            runButtonTapped()
+        } else {
+            openSettings()
+        }
     }
 
     @objc private func runButtonTapped() {
