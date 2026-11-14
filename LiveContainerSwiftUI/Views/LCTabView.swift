@@ -18,6 +18,8 @@ struct LCTabView: View {
     @State var shouldToggleMainWindowOpen = false
     @Environment(\.scenePhase) var scenePhase
     @StateObject var downloadHelper = DownloadHelper()
+    @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
+    @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
 
     let pub = NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)
     
@@ -49,6 +51,8 @@ struct LCTabView: View {
                 }
                 .tag(LCTabIdentifier.settings)
         }
+        .tint(LCTheme.color(hex: themeAccentHex))
+        .preferredColorScheme(LCTheme.colorScheme(for: themeAppearance))
         .downloadAlert(helper: downloadHelper)
         .environmentObject(downloadHelper)
         .alert("lc.common.error".loc, isPresented: $errorShow){

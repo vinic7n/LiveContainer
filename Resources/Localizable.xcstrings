@@ -21496,6 +21496,62 @@
         }
       }
     },
+    "lc.theme.accentColor" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accent color" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cor de destaque" } }
+      }
+    },
+    "lc.theme.appearance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Appearance" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Aparência" } }
+      }
+    },
+    "lc.theme.appearance.system" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "System" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Sistema" } }
+      }
+    },
+    "lc.theme.appearance.light" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Light" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Claro" } }
+      }
+    },
+    "lc.theme.appearance.dark" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dark" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Escuro" } }
+      }
+    },
+    "lc.theme.homeScreenLayout" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Home Screen layout" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Layout de Tela Inicial" } }
+      }
+    },
+    "lc.theme.chooseWallpaper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose home screen wallpaper" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Escolher papel de parede da tela inicial" } }
+      }
+    },
+    "lc.theme.removeWallpaper" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove wallpaper" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Remover papel de parede" } }
+      }
+    },
     "lc.settings.dynamicColors" : {
       "extractionState" : "manual",
       "localizations" : {

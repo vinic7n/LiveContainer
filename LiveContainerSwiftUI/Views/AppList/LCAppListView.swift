@@ -6,7 +6,9 @@
 //
 
 import Combine
+import PhotosUI
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 class SearchContext: ObservableObject {
@@ -81,6 +83,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
+    @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
+    @State private var homeScreenWallpaper: UIImage?
     
     @State private var isViewAppeared = false
     
@@ -216,13 +221,59 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
 
             }
+            .background {
+                if appListGrid {
+                    GeometryReader { geometry in
+                        ZStack {
+                            if let homeScreenWallpaper {
+                                Image(uiImage: homeScreenWallpaper)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: geometry.size.width, height: geometry.size.height)
+                                    .clipped()
+                            } else {
+                                LinearGradient(
+                                    colors: [LCTheme.color(hex: themeAccentHex).opacity(0.55), Color.black],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            }
+                            Color.black.opacity(homeScreenWallpaper == nil ? 0.24 : 0.32)
+                        }
+                        .ignoresSafeArea()
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if appListGrid {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            sharedModel.selectedTab = .settings
+                        }
+                    } label: {
+                        Image(systemName: "gearshape.fill")
+                            .font(.system(size: 27, weight: .semibold))
+                            .foregroundStyle(LCTheme.color(hex: themeAccentHex))
+                            .frame(width: 68, height: 58)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 19, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.horizontal, 52)
+                    .padding(.bottom, 6)
+                }
+            }
             .navigationBarProgressBar(show:$installprogressVisible, progress: $installProgressPercentage)
             .coordinateSpace(name: "scroll")
             .onAppear {
                 if !didAppear {
                     onAppear()
                 }
+                loadHomeScreenWallpaper()
             }
+            .onChange(of: wallpaperRevision) { _ in loadHomeScreenWallpaper() }
             
             .navigationTitle("lc.appList.myApps".loc)
             .toolbar {
@@ -306,6 +357,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                 }
             }
+            .toolbar(appListGrid ? .hidden : .visible, for: .tabBar)
+            .toolbar(appListGrid ? .hidden : .visible, for: .navigationBar)
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .alert("lc.common.error".loc, isPresented: $errorShow){
@@ -480,6 +533,14 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     private var gridColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+    }
+
+    private func loadHomeScreenWallpaper() {
+        guard let data = try? Data(contentsOf: LCTheme.homeScreenWallpaperURL) else {
+            homeScreenWallpaper = nil
+            return
+        }
+        homeScreenWallpaper = UIImage(data: data)
     }
     
     var JITEnablingModal : some View {
@@ -1186,7 +1247,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
     
     func openNavigationView(view: AnyView) {
-        navigateTo = view
+        navigateTo = AnyView(view.toolbar(.visible, for: .navigationBar))
         isNavigationActive = true
     }
     

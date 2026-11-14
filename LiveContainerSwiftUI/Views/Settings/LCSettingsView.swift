@@ -6,7 +6,9 @@
 //
 
 import Foundation
+import PhotosUI
 import SwiftUI
+import UIKit
 import UserNotifications
 
 enum JITEnablerType : Int, CaseIterable, Identifiable {
@@ -53,6 +55,12 @@ struct LCSettingsView: View {
     @AppStorage("LCStrictHiding", store: LCUtils.appGroupUserDefault) var strictHiding = false
     @AppStorage("dynamicColors", store: LCUtils.appGroupUserDefault) var dynamicColors = true
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) var darkModeIcon = false
+    @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
+    @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
+    @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
+    @State private var selectedHomeScreenWallpaper: PhotosPickerItem?
+    @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
     
     @AppStorage("LCSideJITServerAddress", store: LCUtils.appGroupUserDefault) var sideJITServerAddress : String = ""
     @AppStorage("LCDeviceUDID", store: LCUtils.appGroupUserDefault) var deviceUDID: String = ""
@@ -202,6 +210,32 @@ struct LCSettingsView: View {
                 }
                 
                 Section{
+                    Toggle(isOn: $appListGrid) {
+                        Text("lc.theme.homeScreenLayout".loc)
+                    }
+                    PhotosPicker(selection: $selectedHomeScreenWallpaper, matching: .images, photoLibrary: .shared()) {
+                        Label("lc.theme.chooseWallpaper".loc, systemImage: "photo")
+                    }
+                    if homeScreenWallpaperConfigured {
+                        Button("lc.theme.removeWallpaper".loc, role: .destructive) {
+                            try? FileManager.default.removeItem(at: LCTheme.homeScreenWallpaperURL)
+                            homeScreenWallpaperConfigured = false
+                            wallpaperRevision += 1
+                        }
+                    }
+                    ColorPicker(
+                        "lc.theme.accentColor".loc,
+                        selection: Binding(
+                            get: { LCTheme.color(hex: themeAccentHex) },
+                            set: { themeAccentHex = LCTheme.hex(color: $0) }
+                        ),
+                        supportsOpacity: false
+                    )
+                    Picker("lc.theme.appearance".loc, selection: $themeAppearance) {
+                        Text("lc.theme.appearance.system".loc).tag("system")
+                        Text("lc.theme.appearance.light".loc).tag("light")
+                        Text("lc.theme.appearance.dark".loc).tag("dark")
+                    }
                     Toggle(isOn: $dynamicColors) {
                         Text("lc.settings.dynamicColors".loc)
                     }
@@ -442,6 +476,26 @@ struct LCSettingsView: View {
                     certificateImportPasswordAlert.show = false
                 }
             )
+            .onChange(of: selectedHomeScreenWallpaper) { item in
+                guard let item else { return }
+                Task {
+                    guard let data = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data),
+                          let jpegData = image.jpegData(compressionQuality: 0.88) else { return }
+                    do {
+                        try FileManager.default.createDirectory(
+                            at: LCPath.lcGroupDocPath,
+                            withIntermediateDirectories: true
+                        )
+                        try jpegData.write(to: LCTheme.homeScreenWallpaperURL, options: .atomic)
+                        homeScreenWallpaperConfigured = true
+                        wallpaperRevision += 1
+                    } catch {
+                        errorInfo = error.localizedDescription
+                        errorShow = true
+                    }
+                }
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear() {
