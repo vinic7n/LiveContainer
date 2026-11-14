@@ -155,12 +155,10 @@ final class AltStoreSourcesViewModel: ObservableObject {
     private let defaultsKey = "LCAltStoreSourceURLs"
 
     private let cacheDirectoryName = "AltStoreSourceCache"
+    private var didInitialRefresh = false
     
     init() {
         loadStoredSources()
-        Task {
-            await refreshAllSources()
-        }
     }
     
     func addSource(from rawValue: String) async -> String? {
@@ -189,14 +187,30 @@ final class AltStoreSourcesViewModel: ObservableObject {
     }
     
     func refreshAllSources() async {
-        guard !sources.isEmpty else {
+        guard !sources.isEmpty, !isRefreshingAll else {
             return
         }
         isRefreshingAll = true
-        for url in sources.map({ $0.url }) {
-            await refreshSource(url: url)
+        let urls = sources.map(\.url)
+        await withTaskGroup(of: Void.self) { group in
+            var remainingURLs = urls.makeIterator()
+            for _ in 0..<min(4, urls.count) {
+                guard let url = remainingURLs.next() else { break }
+                group.addTask { await self.refreshSource(url: url) }
+            }
+            while await group.next() != nil {
+                if let url = remainingURLs.next() {
+                    group.addTask { await self.refreshSource(url: url) }
+                }
+            }
         }
         isRefreshingAll = false
+    }
+
+    func refreshSourcesIfNeeded() async {
+        guard !didInitialRefresh else { return }
+        didInitialRefresh = true
+        await refreshAllSources()
     }
     
     private func refreshSource(url: URL) async {
@@ -205,12 +219,17 @@ final class AltStoreSourcesViewModel: ObservableObject {
         }
         sources[index].isLoading = true
         sources[index].error = nil
-        let previousData = cachedData(for: url)
+        let previousDataTask: Task<Data?, Never>? = cacheFileURL(for: url).map { cacheURL in
+            Task.detached(priority: .utility) {
+                try? Data(contentsOf: cacheURL)
+            }
+        }
         do {
             let (source, data) = try await AltStoreSourceLoader.load(from: url)
             guard let sourceIndex = sources.firstIndex(where: { $0.url == url }) else {
                 return
             }
+            let previousData = await previousDataTask?.value
             if let previousData, previousData == data {
                 sources[sourceIndex].isLoading = false
                 return
@@ -231,12 +250,47 @@ final class AltStoreSourcesViewModel: ObservableObject {
         let stored = defaults.array(forKey: defaultsKey) as? [String] ?? []
         let urls = stored.compactMap { URL(string: $0) }
         self.sources = urls.map { SourceItem(url: $0, isLoading: false) }
-        for index in sources.indices {
-            let url = sources[index].url
-            if let data = cachedData(for: url),
-               let cachedSource = try? AltStoreSourceLoader.decode(from: data, baseURL: url) {
-                sources[index].source = cachedSource
+        Task { await restoreCachedSources(for: urls) }
+    }
+
+    private func restoreCachedSources(for urls: [URL]) async {
+        let cacheEntries = urls.compactMap { url -> (URL, URL)? in
+            guard let cacheURL = cacheFileURL(for: url) else { return nil }
+            return (url, cacheURL)
+        }
+        let cachedSources = await withTaskGroup(of: (URL, AltStoreSource?).self) { group in
+            var remainingEntries = cacheEntries.makeIterator()
+            for _ in 0..<min(2, cacheEntries.count) {
+                guard let (url, cacheURL) = remainingEntries.next() else { break }
+                group.addTask {
+                    guard let data = try? Data(contentsOf: cacheURL),
+                          let source = try? AltStoreSourceLoader.decode(from: data, baseURL: url) else {
+                        return (url, nil)
+                    }
+                    return (url, source)
+                }
             }
+            var results: [(URL, AltStoreSource?)] = []
+            for await result in group {
+                results.append(result)
+                if let (url, cacheURL) = remainingEntries.next() {
+                    group.addTask {
+                        guard let data = try? Data(contentsOf: cacheURL),
+                              let source = try? AltStoreSourceLoader.decode(from: data, baseURL: url) else {
+                            return (url, nil)
+                        }
+                        return (url, source)
+                    }
+                }
+            }
+            return results
+        }
+
+        for (url, source) in cachedSources {
+            guard let source,
+                  let index = sources.firstIndex(where: { $0.url == url }),
+                  sources[index].source == nil else { continue }
+            sources[index].source = source
         }
     }
     
@@ -264,17 +318,10 @@ final class AltStoreSourcesViewModel: ObservableObject {
 }
 
 private extension AltStoreSourcesViewModel {
-    func cachedData(for url: URL) -> Data? {
-        guard let fileURL = cacheFileURL(for: url) else { return nil }
-        return try? Data(contentsOf: fileURL)
-    }
-    
     func storeCache(_ data: Data, for url: URL) {
         guard let fileURL = cacheFileURL(for: url) else { return }
-        do {
-            try data.write(to: fileURL, options: .atomic)
-        } catch {
-            // Ignore cache write errors
+        Task.detached(priority: .utility) {
+            try? data.write(to: fileURL, options: .atomic)
         }
     }
     
@@ -315,8 +362,18 @@ private extension AltStoreSourcesViewModel {
 }
 
 enum AltStoreSourceLoader {
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForResource = 45
+        configuration.httpMaximumConnectionsPerHost = 4
+        return URLSession(configuration: configuration)
+    }()
+
     static func load(from url: URL) async throws -> (AltStoreSource, Data) {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (data, response) = try await session.data(for: request)
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
             throw NSError(domain: "AltStoreSource", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "HTTP \(httpResponse.statusCode)"])
@@ -611,6 +668,9 @@ struct LCSourcesView: View {
 
         .onAppear {
             expandedSources = []
+            if sharedModel.selectedTab == .sources {
+                Task { await viewModel.refreshSourcesIfNeeded() }
+            }
             if !isViewAppeared {
                 guard sharedModel.selectedTab == .sources, let link = sharedModel.deepLink else { return }
                 sharedModel.deepLink = nil
@@ -621,6 +681,10 @@ struct LCSourcesView: View {
         .onChange(of: viewModel.sources) { newSources in
             let newSet = Set(newSources.map { $0.id })
             expandedSources = expandedSources.intersection(newSet)
+        }
+        .onChange(of: sharedModel.selectedTab) { selectedTab in
+            guard selectedTab == .sources else { return }
+            Task { await viewModel.refreshSourcesIfNeeded() }
         }
         .onChange(of: sharedModel.deepLink) { link in
             guard sharedModel.selectedTab == .sources, let link else { return }
@@ -916,7 +980,9 @@ private struct AltStoreSourceSectionView: View {
                     RoundedRectangle(cornerRadius: 18)
                         .fill(Color(uiColor: UIColor.secondarySystemBackground))
                 )
-            } else if let source = item.source, isExpanded || isFiltering {
+            }
+
+            if let source = item.source, isExpanded || isFiltering {
                 VStack(spacing: 12) {
                     ForEach(filteredApps[0..<min(50, filteredApps.count)]) { app in
                         LCSourceAppBanner(app: app, source: source, installAction: onInstall)
@@ -935,7 +1001,7 @@ private struct AltStoreSourceSectionView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-            } else if item.isLoading {
+            } else if item.source == nil, item.error == nil, item.isLoading {
                 ProgressView("lc.sources.loading".loc)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

@@ -175,7 +175,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                                 if sharedModel.isHiddenAppUnlocked {
                                     appBannerCollection(filteredHiddenApps)
                                 } else {
-                                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 18)], spacing: 14) {
+                                    LazyVGrid(columns: gridColumns, spacing: 10) {
                                         ForEach(filteredHiddenApps, id: \.self) { _ in
                                             LCAppSkeletonBanner()
                                                 .frame(height: LCAppBannerRootView.gridBannerHeight)
@@ -460,7 +460,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @ViewBuilder
     private func appBannerCollection(_ apps: [LCAppModel]) -> some View {
         if appListGrid {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 18)], spacing: 14) {
+            LazyVGrid(columns: gridColumns, spacing: 10) {
                 ForEach(apps, id: \.self) { app in
                     LCAppBanner(appModel: app, delegate: self, isGrid: true)
                         .transition(.scale)
@@ -476,6 +476,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
         }
+    }
+
+    private var gridColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
     }
     
     var JITEnablingModal : some View {
