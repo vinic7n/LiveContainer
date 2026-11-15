@@ -597,7 +597,9 @@ struct LCSourcesView: View {
                     }
                 }
             }
-            .background(Color.clear)
+            .background {
+                LCHomeScreenWallpaperView()
+            }
             .navigationTitle("lc.tabView.sources".loc)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

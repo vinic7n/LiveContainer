@@ -140,6 +140,9 @@ struct LCTweakFolderView : View {
             }
         }
         .lcTransparentScrollBackground()
+        .background {
+            LCHomeScreenWallpaperView()
+        }
         .navigationTitle(isRoot ? "lc.tabView.tweaks".loc : baseUrl.lastPathComponent)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

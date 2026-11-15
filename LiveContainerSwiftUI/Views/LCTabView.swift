@@ -21,17 +21,11 @@ struct LCTabView: View {
     @StateObject var downloadHelper = DownloadHelper()
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
-    @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
-    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
-    @State private var homeScreenWallpaper: UIImage?
 
     let pub = NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)
     
     var body: some View {
-        ZStack {
-            wallpaperBackground
-
-            TabView(selection: $sharedModel.selectedTab) {
+        TabView(selection: $sharedModel.selectedTab) {
             if DataManager.shared.model.multiLCStatus != 2 {
                 LCSourcesView()
                     .tabItem {
@@ -124,41 +118,6 @@ struct LCTabView: View {
             .onOpenURL { url in
                 dispatchURL(url: url)
             }
-        }
-        .onAppear(perform: loadHomeScreenWallpaper)
-        .onChange(of: wallpaperRevision) { _ in loadHomeScreenWallpaper() }
-    }
-
-    @ViewBuilder
-    private var wallpaperBackground: some View {
-        GeometryReader { geometry in
-            if let homeScreenWallpaper {
-                Image(uiImage: homeScreenWallpaper)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
-                    .overlay(Color.black.opacity(0.22))
-            } else if appListGrid {
-                LinearGradient(
-                    colors: [LCTheme.color(hex: themeAccentHex).opacity(0.55), Color.black],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            } else {
-                Color.clear
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-
-    private func loadHomeScreenWallpaper() {
-        guard let data = try? Data(contentsOf: LCTheme.homeScreenWallpaperURL) else {
-            homeScreenWallpaper = nil
-            return
-        }
-        homeScreenWallpaper = UIImage(data: data)
     }
     
     func dispatchURL(url: URL) {

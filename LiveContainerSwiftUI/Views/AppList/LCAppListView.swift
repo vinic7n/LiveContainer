@@ -239,7 +239,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
 
             }
-            .background(Color.clear)
+            .background {
+                LCHomeScreenWallpaperView()
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if appListGrid {
                     homeScreenFooter

@@ -44,6 +44,36 @@ enum LCTheme {
     }
 }
 
+struct LCHomeScreenWallpaperView: View {
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
+    @State private var wallpaper: UIImage?
+
+    var body: some View {
+        GeometryReader { geometry in
+            Group {
+                if let wallpaper {
+                    Image(uiImage: wallpaper)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .overlay(Color.black.opacity(0.22))
+                } else {
+                    Color.clear
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .onAppear(perform: loadWallpaper)
+        .onChange(of: wallpaperRevision) { _ in loadWallpaper() }
+    }
+
+    private func loadWallpaper() {
+        wallpaper = UIImage(contentsOfFile: LCTheme.homeScreenWallpaperURL.path)
+    }
+}
+
 struct LCHomeScreenWallpaperPicker: UIViewControllerRepresentable {
     let onSelect: (UIImage) -> Void
     let onCancel: () -> Void
