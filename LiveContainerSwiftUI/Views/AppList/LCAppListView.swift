@@ -161,6 +161,16 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                         EmptyView()
                 })
                 .hidden()
+
+                if appListGrid {
+                    HomeScreenWidgets(
+                        appCount: filteredApps.count,
+                        recentAppName: recentHomeAppName,
+                        onEdit: { customSortViewPresent = true }
+                    )
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+                }
                 
                 appBannerCollection(filteredApps, homeScreen: true)
                     .padding(.horizontal, appListGrid ? 8 : 0)
@@ -574,6 +584,21 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         max(1, (filteredApps.count + 23) / 24)
     }
 
+    private var homePageHeight: CGFloat {
+        let rowCount = max(1, min(6, (filteredApps.count + 3) / 4))
+        return CGFloat(rowCount) * LCAppBannerRootView.gridBannerHeight + 12
+    }
+
+    private var recentHomeAppName: String? {
+        sortedApps
+            .compactMap { app -> (String, Date)? in
+                guard let lastLaunched = app.appInfo.lastLaunched else { return nil }
+                return (app.displayName, lastLaunched)
+            }
+            .max { $0.1 < $1.1 }?
+            .0
+    }
+
     @ViewBuilder
     private func appBannerCollection(_ apps: [LCAppModel], homeScreen: Bool = false) -> some View {
         if appListGrid {
@@ -586,7 +611,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                         .foregroundStyle(.white.opacity(0.85))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .frame(height: CGFloat(6) * LCAppBannerRootView.gridBannerHeight + 12)
+                        .frame(height: homePageHeight)
                 } else {
                     TabView(selection: $homePageIndex) {
                         ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageApps in
@@ -595,11 +620,12 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                                     homeAppTile(app, pageApps: sortedApps)
                                 }
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                             .tag(pageIndex)
                         }
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
-                    .frame(height: CGFloat(6) * LCAppBannerRootView.gridBannerHeight + 12)
+                    .frame(height: homePageHeight)
                     .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
                 }
             } else {
@@ -623,7 +649,15 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
 
     private func homeAppTile(_ app: LCAppModel, pageApps: [LCAppModel]) -> some View {
-        LCAppBanner(appModel: app, delegate: self, isGrid: true)
+        HomeScreenAppIcon(app: app) {
+            guard let relativePath = app.appInfo.relativeBundlePath else { return }
+            Task {
+                await launchAppWithBundleId(
+                    bundleId: relativePath,
+                    container: app.uiSelectedContainer?.folderName
+                )
+            }
+        }
             .onDrag {
                 draggedHomeAppID = sharedAppSortManager.getUniqueIdentifier(for: app)
                 return NSItemProvider(object: (draggedHomeAppID ?? "") as NSString)
@@ -1445,6 +1479,101 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
     }
     
+}
+
+private struct HomeScreenWidgets: View {
+    let appCount: Int
+    let recentAppName: String?
+    let onEdit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("LiveContainer")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                Spacer()
+                Button(action: onEdit) {
+                    Label("Editar", systemImage: "square.and.pencil")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label("Apps", systemImage: "square.grid.2x2.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Spacer(minLength: 2)
+                    Text("\(appCount)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text("instalados")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+                .background(
+                    LinearGradient(colors: [Color.blue.opacity(0.85), Color.cyan.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Label("Recentes", systemImage: "clock.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Spacer(minLength: 2)
+                    Text(recentAppName ?? "Nenhum app aberto")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    Text("Último app aberto")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1))
+            }
+        }
+    }
+}
+
+private struct HomeScreenAppIcon: View {
+    @ObservedObject var app: LCAppModel
+    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                IconImageView(icon: app.appInfo.iconIsDarkIcon(darkModeIcon) ?? UIImage())
+                    .frame(width: 60, height: 60)
+
+                Text(app.appInfo.displayName() ?? app.displayName)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
+                    .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: LCAppBannerRootView.gridBannerHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(app.appInfo.displayName() ?? app.displayName)
+    }
 }
 
 private struct SettingsHomeIcon: View {
