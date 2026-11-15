@@ -57,6 +57,7 @@ struct LCSettingsView: View {
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
+    @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @State private var showHomeScreenWallpaperPicker = false
     @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
@@ -211,6 +212,13 @@ struct LCSettingsView: View {
                 Section{
                     Toggle(isOn: $appListGrid) {
                         Text("lc.theme.homeScreenLayout".loc)
+                    }
+                    if appListGrid {
+                        Picker("Home screen icons", selection: $homeScreenLargeIcons) {
+                            Text("Small + names").tag(false)
+                            Text("Large only").tag(true)
+                        }
+                        .pickerStyle(.segmented)
                     }
                     Button {
                         showHomeScreenWallpaperPicker = true

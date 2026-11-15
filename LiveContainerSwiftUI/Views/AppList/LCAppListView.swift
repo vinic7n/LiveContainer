@@ -17,7 +17,7 @@ private struct LCAppGridToolbarVisibility: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
             content
-                .toolbar(isGrid ? .hidden : .visible, for: .tabBar)
+                .toolbar(.visible, for: .tabBar)
                 .toolbar(isGrid ? .hidden : .visible, for: .navigationBar)
         } else {
             content
@@ -99,6 +99,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
+    @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @State private var homeScreenWallpaper: UIImage?
     @State private var draggedHomeAppID: String?
     @State private var homePageIndex = 0
@@ -162,19 +163,13 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 })
                 .hidden()
 
-                if appListGrid {
-                    HomeScreenWidgets(
-                        appCount: filteredApps.count,
-                        recentAppName: recentHomeAppName,
-                        onEdit: { customSortViewPresent = true }
-                    )
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
-                }
-                
                 appBannerCollection(filteredApps, homeScreen: true)
                     .padding(.horizontal, appListGrid ? 8 : 0)
                     .padding(.top, appListGrid ? 4 : 0)
+
+                if appListGrid {
+                    homeScreenFooter
+                }
 
                 VStack {
                     if LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding") {
@@ -270,69 +265,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                             }
                             Color.black.opacity(homeScreenWallpaper == nil ? 0.24 : 0.32)
                         }
-                        .ignoresSafeArea()
                     }
-                }
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if appListGrid {
-                    VStack(spacing: 8) {
-                        if isHomeSearchVisible {
-                            HStack(spacing: 8) {
-                                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                                TextField("Search", text: $searchContext.query)
-                                    .textInputAutocapitalization(.never)
-                                    .autocorrectionDisabled()
-                                Button {
-                                    searchContext.query = ""
-                                    isHomeSearchVisible = false
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .frame(height: 36)
-                            .background(.ultraThinMaterial, in: Capsule())
-                            .padding(.horizontal, 54)
-                        } else {
-                            Button {
-                                isHomeSearchVisible = true
-                            } label: {
-                                Label("Search", systemImage: "magnifyingglass")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 7)
-                                    .background(.ultraThinMaterial, in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        HStack(spacing: 7) {
-                            ForEach(0..<homePageCount, id: \.self) { page in
-                                Circle()
-                                    .fill(page == homePageIndex ? Color.white : Color.white.opacity(0.45))
-                                    .frame(width: 6, height: 6)
-                            }
-                        }
-                        .accessibilityLabel("Home screen page \(homePageIndex + 1) of \(homePageCount)")
-
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                sharedModel.selectedTab = .settings
-                            }
-                        } label: {
-                            SettingsHomeIcon()
-                                .frame(width: 58, height: 58)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 7)
-                    .padding(.bottom, 5)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.horizontal, 52)
-                    .padding(.bottom, 3)
+                    .ignoresSafeArea()
                 }
             }
             .navigationBarProgressBar(show:$installprogressVisible, progress: $installProgressPercentage)
@@ -559,6 +493,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             handleURL(url: link)
         }
         .onDrop(of: [.url], isTargeted: nil) { providers in
+            guard !appListGrid else { return false }
             guard let provider = providers.first else { return false }
             _ = provider.loadObject(ofClass: URL.self) { url, error in
                 guard let url else { return }
@@ -584,19 +519,60 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         max(1, (filteredApps.count + 23) / 24)
     }
 
-    private var homePageHeight: CGFloat {
-        let rowCount = max(1, min(6, (filteredApps.count + 3) / 4))
-        return CGFloat(rowCount) * LCAppBannerRootView.gridBannerHeight + 12
+    private var homeAppTileHeight: CGFloat {
+        homeScreenLargeIcons ? 86 : 100
     }
 
-    private var recentHomeAppName: String? {
-        sortedApps
-            .compactMap { app -> (String, Date)? in
-                guard let lastLaunched = app.appInfo.lastLaunched else { return nil }
-                return (app.displayName, lastLaunched)
+    private var homePageHeight: CGFloat {
+        let rowCount = max(1, min(6, (filteredApps.count + 3) / 4))
+        return CGFloat(rowCount) * homeAppTileHeight + 12
+    }
+
+    @ViewBuilder
+    private var homeScreenFooter: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 7) {
+                ForEach(0..<homePageCount, id: \.self) { page in
+                    Circle()
+                        .fill(page == homePageIndex ? Color.white : Color.white.opacity(0.45))
+                        .frame(width: 6, height: 6)
+                }
             }
-            .max { $0.1 < $1.1 }?
-            .0
+            .accessibilityLabel("Home screen page \(homePageIndex + 1) of \(homePageCount)")
+
+            if isHomeSearchVisible {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                    TextField("Search", text: $searchContext.query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button {
+                        searchContext.query = ""
+                        isHomeSearchVisible = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 38)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.horizontal, 54)
+            } else {
+                Button {
+                    isHomeSearchVisible = true
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -649,7 +625,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
 
     private func homeAppTile(_ app: LCAppModel, pageApps: [LCAppModel]) -> some View {
-        HomeScreenAppIcon(app: app) {
+        HomeScreenAppIcon(app: app, large: homeScreenLargeIcons) {
             guard let relativePath = app.appInfo.relativeBundlePath else { return }
             Task {
                 await launchAppWithBundleId(
@@ -660,9 +636,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
             .onDrag {
                 draggedHomeAppID = sharedAppSortManager.getUniqueIdentifier(for: app)
-                return NSItemProvider(object: (draggedHomeAppID ?? "") as NSString)
+                let data = Data((draggedHomeAppID ?? "").utf8) as NSData
+                return NSItemProvider(item: data, typeIdentifier: UTType.data.identifier)
             }
-            .onDrop(of: [.text], delegate: HomeAppReorderDropDelegate(
+            .onDrop(of: [UTType.data], delegate: HomeAppReorderDropDelegate(
                 app: app,
                 apps: pageApps,
                 manager: sharedAppSortManager,
@@ -1481,117 +1458,35 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
 }
 
-private struct HomeScreenWidgets: View {
-    let appCount: Int
-    let recentAppName: String?
-    let onEdit: () -> Void
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack {
-                Text("LiveContainer")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-                Spacer()
-                Button(action: onEdit) {
-                    Label("Editar", systemImage: "square.and.pencil")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
-                }
-                .buttonStyle(.plain)
-            }
-
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Label("Apps", systemImage: "square.grid.2x2.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Spacer(minLength: 2)
-                    Text("\(appCount)")
-                        .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("instalados")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-                .background(
-                    LinearGradient(colors: [Color.blue.opacity(0.85), Color.cyan.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-                )
-
-                VStack(alignment: .leading, spacing: 7) {
-                    Label("Recentes", systemImage: "clock.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
-                    Spacer(minLength: 2)
-                    Text(recentAppName ?? "Nenhum app aberto")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                    Text("Último app aberto")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.8))
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(.white.opacity(0.12), lineWidth: 1))
-            }
-        }
-    }
-}
-
 private struct HomeScreenAppIcon: View {
     @ObservedObject var app: LCAppModel
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+    let large: Bool
 
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: large ? 0 : 4) {
                 IconImageView(icon: app.appInfo.iconIsDarkIcon(darkModeIcon) ?? UIImage())
-                    .frame(width: 60, height: 60)
+                    .frame(width: large ? 76 : 60, height: large ? 76 : 60)
 
-                Text(app.appInfo.displayName() ?? app.displayName)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
-                    .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                if !large {
+                    Text(app.appInfo.displayName() ?? app.displayName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .shadow(color: .black.opacity(0.7), radius: 2, x: 0, y: 1)
+                        .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28)
+                }
             }
             .frame(maxWidth: .infinity)
-            .frame(height: LCAppBannerRootView.gridBannerHeight)
+            .frame(height: large ? 86 : 100)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(app.appInfo.displayName() ?? app.displayName)
-    }
-}
-
-private struct SettingsHomeIcon: View {
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(LinearGradient(colors: [Color(white: 0.88), Color(white: 0.58)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.white.opacity(0.55), lineWidth: 1)
-            Image(systemName: "gearshape.fill")
-                .font(.system(size: 39, weight: .regular))
-                .foregroundStyle(LinearGradient(colors: [Color(white: 0.98), Color(white: 0.68)], startPoint: .top, endPoint: .bottom))
-                .shadow(color: .black.opacity(0.36), radius: 1.5, x: 0, y: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(.black.opacity(0.18), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
-        .accessibilityLabel("Ajustes")
     }
 }
 
