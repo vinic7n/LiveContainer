@@ -97,10 +97,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
-    @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
-    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
-    @State private var homeScreenWallpaper: UIImage?
     @State private var draggedHomeAppID: String?
     @State private var homePageIndex = 0
     @State private var isHomeSearchVisible = false
@@ -165,11 +162,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
                 appBannerCollection(filteredApps, homeScreen: true)
                     .padding(.horizontal, appListGrid ? 8 : 0)
-                    .padding(.top, appListGrid ? 4 : 0)
-
-                if appListGrid {
-                    homeScreenFooter
-                }
+                    .padding(.top, appListGrid ? 24 : 0)
 
                 VStack {
                     if LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding") {
@@ -246,27 +239,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
 
             }
-            .background {
+            .background(Color.clear)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 if appListGrid {
-                    GeometryReader { geometry in
-                        ZStack {
-                            if let homeScreenWallpaper {
-                                Image(uiImage: homeScreenWallpaper)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: geometry.size.width, height: geometry.size.height)
-                                    .clipped()
-                            } else {
-                                LinearGradient(
-                                    colors: [LCTheme.color(hex: themeAccentHex).opacity(0.55), Color.black],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            }
-                            Color.black.opacity(homeScreenWallpaper == nil ? 0.24 : 0.32)
-                        }
-                    }
-                    .ignoresSafeArea()
+                    homeScreenFooter
                 }
             }
             .navigationBarProgressBar(show:$installprogressVisible, progress: $installProgressPercentage)
@@ -275,9 +251,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 if !didAppear {
                     onAppear()
                 }
-                loadHomeScreenWallpaper()
             }
-            .onChange(of: wallpaperRevision) { _ in loadHomeScreenWallpaper() }
             .onChange(of: searchContext.query) { _ in homePageIndex = 0 }
             
             .navigationTitle("lc.appList.myApps".loc)
@@ -365,6 +339,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             .modifier(LCAppGridToolbarVisibility(isGrid: appListGrid))
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .background(Color.clear)
         .alert("lc.common.error".loc, isPresented: $errorShow){
             Button("lc.common.ok".loc, action: {
             })
@@ -652,14 +627,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
     }
 
-    private func loadHomeScreenWallpaper() {
-        guard let data = try? Data(contentsOf: LCTheme.homeScreenWallpaperURL) else {
-            homeScreenWallpaper = nil
-            return
-        }
-        homeScreenWallpaper = UIImage(data: data)
-    }
-    
     var JITEnablingModal : some View {
         NavigationView {
             ScrollViewReader { proxy in

@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 struct LCTabView: View {
     @State var errorShow = false
@@ -20,11 +21,17 @@ struct LCTabView: View {
     @StateObject var downloadHelper = DownloadHelper()
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
+    @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
+    @State private var homeScreenWallpaper: UIImage?
 
     let pub = NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)
     
     var body: some View {
-        TabView(selection: $sharedModel.selectedTab) {
+        ZStack {
+            wallpaperBackground
+
+            TabView(selection: $sharedModel.selectedTab) {
             if DataManager.shared.model.multiLCStatus != 2 {
                 LCSourcesView()
                     .tabItem {
@@ -50,21 +57,22 @@ struct LCTabView: View {
                     Label("lc.tabView.settings".loc, systemImage: "gearshape.fill")
                 }
                 .tag(LCTabIdentifier.settings)
-        }
-        .tint(LCTheme.color(hex: themeAccentHex))
-        .preferredColorScheme(LCTheme.colorScheme(for: themeAppearance))
-        .downloadAlert(helper: downloadHelper)
-        .environmentObject(downloadHelper)
-        .alert("lc.common.error".loc, isPresented: $errorShow){
+            }
+            .background(Color.clear)
+            .tint(LCTheme.color(hex: themeAccentHex))
+            .preferredColorScheme(LCTheme.colorScheme(for: themeAppearance))
+            .downloadAlert(helper: downloadHelper)
+            .environmentObject(downloadHelper)
+            .alert("lc.common.error".loc, isPresented: $errorShow){
             Button("lc.common.ok".loc, action: {
             })
             Button("lc.common.copy".loc, action: {
                 copyError()
             })
-        } message: {
-            Text(errorInfo)
-        }
-        .sheet(isPresented: $crashReportShow) {
+            } message: {
+                Text(errorInfo)
+            }
+            .sheet(isPresented: $crashReportShow) {
             NavigationView {
                 ScrollView {
                     Text(errorInfo)
@@ -97,25 +105,60 @@ struct LCTabView: View {
                 .navigationTitle("lc.common.error".loc)
                 .navigationBarTitleDisplayMode(.inline)
             }
-        }
-        .task {
-            closeDuplicatedWindow()
-            checkLastLaunchError()
-            checkTeamId()
-            checkAndSaveBundleId()
-            checkGetTaskAllow()
-            checkPrivateContainerBookmark()
-        }
-        .onReceive(pub) { out in
-            if let scene1 = sceneDelegate.window?.windowScene, let scene2 = out.object as? UIWindowScene, scene1 == scene2 {
-                if shouldToggleMainWindowOpen {
-                    DataManager.shared.model.mainWindowOpened = false
+            }
+            .task {
+                closeDuplicatedWindow()
+                checkLastLaunchError()
+                checkTeamId()
+                checkAndSaveBundleId()
+                checkGetTaskAllow()
+                checkPrivateContainerBookmark()
+            }
+            .onReceive(pub) { out in
+                if let scene1 = sceneDelegate.window?.windowScene, let scene2 = out.object as? UIWindowScene, scene1 == scene2 {
+                    if shouldToggleMainWindowOpen {
+                        DataManager.shared.model.mainWindowOpened = false
+                    }
                 }
             }
+            .onOpenURL { url in
+                dispatchURL(url: url)
+            }
         }
-        .onOpenURL { url in
-            dispatchURL(url: url)
+        .onAppear(perform: loadHomeScreenWallpaper)
+        .onChange(of: wallpaperRevision) { _ in loadHomeScreenWallpaper() }
+    }
+
+    @ViewBuilder
+    private var wallpaperBackground: some View {
+        GeometryReader { geometry in
+            if let homeScreenWallpaper {
+                Image(uiImage: homeScreenWallpaper)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
+                    .overlay(Color.black.opacity(0.22))
+            } else if appListGrid {
+                LinearGradient(
+                    colors: [LCTheme.color(hex: themeAccentHex).opacity(0.55), Color.black],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            } else {
+                Color.clear
+            }
         }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private func loadHomeScreenWallpaper() {
+        guard let data = try? Data(contentsOf: LCTheme.homeScreenWallpaperURL) else {
+            homeScreenWallpaper = nil
+            return
+        }
+        homeScreenWallpaper = UIImage(data: data)
     }
     
     func dispatchURL(url: URL) {

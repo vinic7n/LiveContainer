@@ -25,6 +25,18 @@ struct SafariView: UIViewControllerRepresentable {
 // https://stackoverflow.com/questions/56726663/how-to-add-a-textfield-to-alert-in-swiftui
 extension View {
 
+    @ViewBuilder
+    func lcTransparentScrollBackground() -> some View {
+        if #available(iOS 16.0, *) {
+            self.scrollContentBackground(.hidden)
+                .listRowBackground(Color.black.opacity(0.12))
+                .background(Color.clear)
+        } else {
+            self.listRowBackground(Color.black.opacity(0.12))
+                .background(Color.clear)
+        }
+    }
+
     public func textFieldAlert(
         isPresented: Binding<Bool>,
         title: String,

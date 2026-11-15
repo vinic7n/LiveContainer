@@ -359,7 +359,8 @@ struct LCSettingsView: View {
                         }
                 }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(Color(UIColor.systemGroupedBackground))
+                    .background(Color.clear)
+                    .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
                 
                 if sharedModel.developerMode {
@@ -420,6 +421,7 @@ struct LCSettingsView: View {
                     }
                 }
             }
+            .lcTransparentScrollBackground()
             .navigationBarTitle("lc.tabView.settings".loc)
             .alert("lc.common.error".loc, isPresented: $errorShow){
             } message: {
@@ -493,6 +495,7 @@ struct LCSettingsView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .background(Color.clear)
         .onAppear() {
             if !isViewAppeared {
                 guard sharedModel.selectedTab == .settings, let link = sharedModel.deepLink else { return }

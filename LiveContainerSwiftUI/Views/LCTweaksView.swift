@@ -139,6 +139,7 @@ struct LCTweakFolderView : View {
                 }
             }
         }
+        .lcTransparentScrollBackground()
         .navigationTitle(isRoot ? "lc.tabView.tweaks".loc : baseUrl.lastPathComponent)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -397,6 +398,7 @@ struct LCTweaksView: View {
             LCTweakFolderView(baseUrl: LCPath.tweakPath, isRoot: true)
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .background(Color.clear)
 
     }
 }

@@ -597,6 +597,7 @@ struct LCSourcesView: View {
                     }
                 }
             }
+            .background(Color.clear)
             .navigationTitle("lc.tabView.sources".loc)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -616,6 +617,7 @@ struct LCSourcesView: View {
             }
         }
         .navigationViewStyle(StackNavigationViewStyle())
+        .background(Color.clear)
         .alert("lc.common.error".loc, isPresented: Binding<Bool>(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } })
