@@ -600,6 +600,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .frame(height: CGFloat(6) * LCAppBannerRootView.gridBannerHeight + 12)
+                    .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
                 }
             } else {
                 LazyVGrid(columns: gridColumns, spacing: 10) {
@@ -608,8 +609,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                             .transition(.scale)
                     }
                 }
+                .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
             }
-            .animation(searchContext.isTyping ? nil : .easeInOut, value: apps)
         } else {
             LazyVStack {
                 ForEach(apps, id: \.self) { app in
