@@ -94,7 +94,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @EnvironmentObject private var sharedAppSortManager : LCAppSortManager
     
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
-    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
@@ -260,6 +259,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
             }
             .onChange(of: searchContext.query) { _ in homePageIndex = 0 }
+            .onChange(of: appListGrid) { _ in homePageIndex = 0 }
             .onChange(of: showHomeClockWidget) { _ in homePageIndex = 0 }
             .onChange(of: homeClockWidgetRows) { _ in homePageIndex = 0 }
             
@@ -286,15 +286,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    if(UserDefaults.sideStoreExist()) {
-                        Button {
-                            LCUtils.openSideStore(delegate: self)
-                        } label: {
-                            IconImageView(icon: BuiltInSideStoreAppInfo.shared.iconIsDarkIcon(darkModeIcon))
-                                .frame(width: UIFont.preferredFont(forTextStyle: .body).lineHeight, height: UIFont.preferredFont(forTextStyle: .body).lineHeight)
-
-                        }
-                    } else {
+                    if !UserDefaults.sideStoreExist() {
                         Button("Help", systemImage: "questionmark") {
                             helpPresent = true
                         }
@@ -303,15 +295,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
                 }
                 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        withAnimation(.easeInOut) { appListGrid.toggle() }
-                    } label: {
-                        Label(appListGrid ? "List" : "Grid", systemImage: appListGrid ? "list.bullet" : "square.grid.2x2")
-                    }
-                    .accessibilityLabel(appListGrid ? "Show apps as a list" : "Show apps as a grid")
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("lc.appList.openLink".loc, systemImage: "link", action: {
                         Task { await onOpenWebViewTapped() }
@@ -560,69 +543,38 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .accessibilityLabel("Home screen page \(homePageIndex + 1) of \(homePageCount)")
 
-            HStack(spacing: 8) {
-                if UserDefaults.sideStoreExist() {
+            Group {
+                if isHomeSearchVisible {
+                    HStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                        TextField("Search", text: $searchContext.query)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button {
+                            searchContext.query = ""
+                            isHomeSearchVisible = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 38)
+                    .background(.ultraThinMaterial, in: Capsule())
+                } else {
                     Button {
-                        LCUtils.openSideStore(delegate: self)
+                        isHomeSearchVisible = true
                     } label: {
-                        Image(uiImage: BuiltInSideStoreAppInfo.shared.iconIsDarkIcon(darkModeIcon))
-                            .resizable()
-                            .scaledToFit()
-                            .padding(7)
-                            .frame(width: 38, height: 38)
-                            .background(.ultraThinMaterial, in: Circle())
+                        Label("Search", systemImage: "magnifyingglass")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 38)
+                            .background(.ultraThinMaterial, in: Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("SideStore")
-                } else {
-                    Color.clear.frame(width: 38, height: 38)
                 }
-
-                Group {
-                    if isHomeSearchVisible {
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                            TextField("Search", text: $searchContext.query)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                            Button {
-                                searchContext.query = ""
-                                isHomeSearchVisible = false
-                            } label: {
-                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(height: 38)
-                        .background(.ultraThinMaterial, in: Capsule())
-                    } else {
-                        Button {
-                            isHomeSearchVisible = true
-                        } label: {
-                            Label("Search", systemImage: "magnifyingglass")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .frame(height: 38)
-                                .background(.ultraThinMaterial, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .frame(maxWidth: 220)
-
-                Button {
-                    appListGrid = false
-                } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: 38, height: 38)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Switch to list layout")
             }
+            .frame(maxWidth: 300)
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)

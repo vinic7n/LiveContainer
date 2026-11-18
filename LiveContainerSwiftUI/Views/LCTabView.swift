@@ -31,6 +31,8 @@ struct LCTabView: View {
     @StateObject var downloadHelper = DownloadHelper()
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
+    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
+    @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
 
     init() {
         if #available(iOS 15.0, *) {
@@ -141,28 +143,67 @@ struct LCTabView: View {
     }
 
     private var homeDock: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 14) {
             Spacer(minLength: 0)
+            if UserDefaults.sideStoreExist() {
+                Button {
+                    LCUtils.openSideStore()
+                } label: {
+                    dockAppIcon {
+                        Image(uiImage: BuiltInSideStoreAppInfo.shared.iconIsDarkIcon(darkModeIcon))
+                            .resizable()
+                            .scaledToFit()
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("SideStore")
+            }
+
+            Button {
+                appListGrid.toggle()
+            } label: {
+                dockAppIcon {
+                    ZStack {
+                        LinearGradient(
+                            colors: [Color(red: 0.20, green: 0.48, blue: 0.94), Color(red: 0.12, green: 0.28, blue: 0.68)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        Image(systemName: appListGrid ? "list.bullet" : "square.grid.2x2.fill")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(appListGrid ? "Switch to list layout" : "Switch to app grid")
+
             Button {
                 sharedModel.selectedTab = .settings
             } label: {
-                Image("SettingsAppIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 48, height: 48)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                dockAppIcon {
+                    Image("SettingsAppIcon")
+                        .resizable()
+                        .scaledToFit()
+                }
             }
             .buttonStyle(.plain)
             .accessibilityLabel("lc.tabView.settings".loc)
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: 280, minHeight: 66)
-        .padding(.horizontal, 10)
-        .background(.ultraThinMaterial, in: Capsule())
-        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 18)
+        .frame(width: 320, height: 78)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
         .frame(maxWidth: .infinity)
         .padding(.top, 5)
         .padding(.bottom, 4)
+    }
+
+    private func dockAppIcon<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .frame(width: 58, height: 58)
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
     }
 
     
