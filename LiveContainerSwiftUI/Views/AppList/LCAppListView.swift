@@ -101,6 +101,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @State private var draggedHomeAppID: String?
     @State private var homePageIndex = 0
     @State private var isHomeSearchVisible = false
+    @State private var homeAppPendingUninstall: LCAppModel?
+    @StateObject private var homeUninstallConfirmation = YesNoHelper()
+    @StateObject private var homeDeleteDataConfirmation = YesNoHelper()
     
     @State private var isViewAppeared = false
     
@@ -351,6 +354,26 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         } message: {
             Text(errorInfo)
         }
+        .alert("lc.appBanner.confirmUninstallTitle".loc, isPresented: $homeUninstallConfirmation.show) {
+            Button("lc.appBanner.uninstall".loc, role: .destructive) {
+                homeUninstallConfirmation.close(result: true)
+            }
+            Button("lc.common.cancel".loc, role: .cancel) {
+                homeUninstallConfirmation.close(result: false)
+            }
+        } message: {
+            Text("lc.appBanner.confirmUninstallMsg %@".localizeWithFormat(homeAppPendingUninstall?.appInfo.displayName() ?? ""))
+        }
+        .alert("lc.appBanner.deleteDataTitle".loc, isPresented: $homeDeleteDataConfirmation.show) {
+            Button("lc.common.delete".loc, role: .destructive) {
+                homeDeleteDataConfirmation.close(result: true)
+            }
+            Button("lc.common.no".loc, role: .cancel) {
+                homeDeleteDataConfirmation.close(result: false)
+            }
+        } message: {
+            Text("lc.appBanner.deleteDataMsg %@".localizeWithFormat(homeAppPendingUninstall?.appInfo.displayName() ?? ""))
+        }
         .betterFileImporter(isPresented: $choosingIPA, types: [.ipa, .tipa], multiple: false, callback: { fileUrls in
             Task { await startInstallApp(fileUrls[0]) }
         }, onDismiss: {
@@ -517,36 +540,70 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
             .accessibilityLabel("Home screen page \(homePageIndex + 1) of \(homePageCount)")
 
-            if isHomeSearchVisible {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("Search", text: $searchContext.query)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+            HStack(spacing: 8) {
+                if UserDefaults.sideStoreExist() {
                     Button {
-                        searchContext.query = ""
-                        isHomeSearchVisible = false
+                        LCUtils.openSideStore(delegate: self)
                     } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                        Image(uiImage: BuiltInSideStoreAppInfo.shared.iconIsDarkIcon(darkModeIcon))
+                            .resizable()
+                            .scaledToFit()
+                            .padding(7)
+                            .frame(width: 38, height: 38)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("SideStore")
+                } else {
+                    Color.clear.frame(width: 38, height: 38)
+                }
+
+                Group {
+                    if isHomeSearchVisible {
+                        HStack(spacing: 8) {
+                            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                            TextField("Search", text: $searchContext.query)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                            Button {
+                                searchContext.query = ""
+                                isHomeSearchVisible = false
+                            } label: {
+                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 38)
+                        .background(.ultraThinMaterial, in: Capsule())
+                    } else {
+                        Button {
+                            isHomeSearchVisible = true
+                        } label: {
+                            Label("Search", systemImage: "magnifyingglass")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .frame(height: 38)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 14)
-                .frame(height: 38)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(.horizontal, 54)
-            } else {
+                .frame(maxWidth: 220)
+
                 Button {
-                    isHomeSearchVisible = true
+                    appListGrid = false
                 } label: {
-                    Label("Search", systemImage: "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 7)
-                        .background(.ultraThinMaterial, in: Capsule())
+                        .frame(width: 38, height: 38)
+                        .background(.ultraThinMaterial, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Switch to list layout")
             }
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -611,6 +668,48 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 )
             }
         }
+            .contextMenu {
+                if #available(iOS 16.0, *) {
+                    Button {
+                        Task {
+                            do {
+                                if app.appInfo.isLocked && !sharedModel.isHiddenAppUnlocked {
+                                    guard try await LCUtils.authenticateUser() else { return }
+                                }
+                                try await app.runApp(multitask: true)
+                            } catch {
+                                errorInfo = error.localizedDescription
+                                errorShow = true
+                            }
+                        }
+                    } label: {
+                        Label("lc.appBanner.multitask".loc, systemImage: "macwindow.badge.plus")
+                    }
+                }
+
+                Menu("lc.appBanner.addToHomeScreen".loc) {
+                    Button("lc.appBanner.copyLaunchUrl".loc, systemImage: "link") {
+                        copyHomeAppLaunchURL(app)
+                    }
+                    Button("lc.appBanner.createAppClip".loc, systemImage: "appclip") {
+                        Task { await createHomeAppClip(app) }
+                    }
+                }
+
+                Button {
+                    openNavigationView(view: AnyView(LCAppSettingsView(model: app)))
+                } label: {
+                    Label("lc.tabView.settings".loc, systemImage: "gear")
+                }
+
+                if !app.uiIsShared {
+                    Button(role: .destructive) {
+                        Task { await uninstallHomeApp(app) }
+                    } label: {
+                        Label("lc.appBanner.uninstall".loc, systemImage: "trash")
+                    }
+                }
+            }
             .onDrag {
                 guard let appID = sharedAppSortManager.getUniqueIdentifier(for: app) else {
                     return NSItemProvider()
@@ -634,6 +733,65 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 draggedAppID: $draggedHomeAppID
             ))
             .transition(.scale)
+    }
+
+    private func copyHomeAppLaunchURL(_ app: LCAppModel) {
+        guard let relativeBundlePath = app.appInfo.relativeBundlePath else { return }
+        if let folderName = app.uiSelectedContainer?.folderName {
+            UIPasteboard.general.string = "livecontainer://livecontainer-launch?bundle-name=\(relativeBundlePath)&container-folder-name=\(folderName)"
+        } else {
+            UIPasteboard.general.string = "livecontainer://livecontainer-launch?bundle-name=\(relativeBundlePath)"
+        }
+    }
+
+    private func createHomeAppClip(_ app: LCAppModel) async {
+        guard let style = await generatedIconStyleSelector.open() else { return }
+        do {
+            guard let profile = app.appInfo.generateWebClipConfig(
+                withContainerId: app.uiSelectedContainer?.folderName,
+                iconStyle: style
+            ) else {
+                throw CocoaError(.propertyListWriteInvalid)
+            }
+            let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
+            installMdm(data: data)
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+    }
+
+    private func uninstallHomeApp(_ app: LCAppModel) async {
+        homeAppPendingUninstall = app
+        guard await homeUninstallConfirmation.open() == true else {
+            homeAppPendingUninstall = nil
+            return
+        }
+        guard let bundlePath = app.appInfo.bundlePath() else {
+            homeAppPendingUninstall = nil
+            return
+        }
+
+        let containers = app.appInfo.containers
+        var removeData = false
+        if !containers.isEmpty {
+            removeData = await homeDeleteDataConfirmation.open() == true
+        }
+        do {
+            try FileManager.default.removeItem(atPath: bundlePath)
+            removeApp(app: app)
+            if removeData {
+                for container in containers {
+                    try FileManager.default.removeItem(at: LCPath.dataPath.appendingPathComponent(container.folderName))
+                    LCUtils.removeAppKeychain(dataUUID: container.folderName)
+                    sharedModel.appDataFolderNames.removeAll { $0 == container.folderName }
+                }
+            }
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+        homeAppPendingUninstall = nil
     }
 
     private var gridColumns: [GridItem] {
