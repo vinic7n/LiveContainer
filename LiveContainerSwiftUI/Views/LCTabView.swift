@@ -9,6 +9,16 @@ import Foundation
 import SwiftUI
 import UIKit
 
+private struct LCHideSystemTabBar: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.0, *) {
+            content.toolbar(.hidden, for: .tabBar)
+        } else {
+            content
+        }
+    }
+}
+
 struct LCTabView: View {
     @State var errorShow = false
     @State var crashReportShow = false
@@ -21,6 +31,12 @@ struct LCTabView: View {
     @StateObject var downloadHelper = DownloadHelper()
     @AppStorage("LCThemeAccentHex", store: LCUtils.appGroupUserDefault) private var themeAccentHex = "409EFF"
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
+
+    init() {
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().isHidden = true
+        }
+    }
 
     let pub = NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)
     
@@ -51,6 +67,10 @@ struct LCTabView: View {
                     Label("lc.tabView.settings".loc, systemImage: "gearshape.fill")
                 }
                 .tag(LCTabIdentifier.settings)
+            }
+            .modifier(LCHideSystemTabBar())
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                homeDock
             }
             .background(Color.clear)
             .tint(LCTheme.color(hex: themeAccentHex))
@@ -119,6 +139,33 @@ struct LCTabView: View {
                 dispatchURL(url: url)
             }
     }
+
+    private var homeDock: some View {
+        Button {
+            sharedModel.selectedTab = .settings
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.system(size: 23, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 52, height: 52)
+                .background(
+                    LinearGradient(colors: [Color.white.opacity(0.5), Color.gray.opacity(0.78)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("lc.tabView.settings".loc)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .padding(.top, 5)
+        .padding(.bottom, 4)
+        .background {
+            LCHomeScreenWallpaperView()
+                .overlay(.black.opacity(0.18))
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+
     
     func dispatchURL(url: URL) {
         repeat {

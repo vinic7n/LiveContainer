@@ -58,6 +58,8 @@ struct LCSettingsView: View {
     @AppStorage("LCThemeAppearance", store: LCUtils.appGroupUserDefault) private var themeAppearance = "system"
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
+    @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
+    @AppStorage("LCHomeScreenShowAppCountWidget", store: LCUtils.appGroupUserDefault) private var showHomeAppCountWidget = false
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @State private var showHomeScreenWallpaperPicker = false
     @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
@@ -90,6 +92,27 @@ struct LCSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
+                Section("LiveContainer") {
+                    if sharedModel.multiLCStatus != 2 {
+                        Button {
+                            sharedModel.selectedTab = .sources
+                        } label: {
+                            Label("lc.tabView.sources".loc, systemImage: "books.vertical")
+                        }
+
+                        Button {
+                            sharedModel.selectedTab = .tweaks
+                        } label: {
+                            Label("lc.tabView.tweaks".loc, systemImage: "wrench.and.screwdriver")
+                        }
+                    }
+                }
+
+                Section("Home Screen Widgets") {
+                    Toggle("Clock and date", isOn: $showHomeClockWidget)
+                    Toggle("Installed app count", isOn: $showHomeAppCountWidget)
+                }
+
                 if sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
@@ -426,6 +449,16 @@ struct LCSettingsView: View {
                 LCHomeScreenWallpaperView()
             }
             .navigationBarTitle("lc.tabView.settings".loc)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        sharedModel.selectedTab = .apps
+                    } label: {
+                        Image(systemName: "house.fill")
+                    }
+                    .accessibilityLabel("Home")
+                }
+            }
             .alert("lc.common.error".loc, isPresented: $errorShow){
             } message: {
                 Text(errorInfo)

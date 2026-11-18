@@ -17,7 +17,6 @@ private struct LCAppGridToolbarVisibility: ViewModifier {
     func body(content: Content) -> some View {
         if #available(iOS 16.0, *) {
             content
-                .toolbar(.visible, for: .tabBar)
                 .toolbar(isGrid ? .hidden : .visible, for: .navigationBar)
         } else {
             content
@@ -98,6 +97,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
+    @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
+    @AppStorage("LCHomeScreenShowAppCountWidget", store: LCUtils.appGroupUserDefault) private var showHomeAppCountWidget = false
     @State private var draggedHomeAppID: String?
     @State private var homePageIndex = 0
     @State private var isHomeSearchVisible = false
@@ -162,6 +163,12 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                         EmptyView()
                 })
                 .hidden()
+
+                if appListGrid && searchContext.debouncedQuery.isEmpty && (showHomeClockWidget || showHomeAppCountWidget) {
+                    homeScreenWidgets
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 6)
+                }
 
                 appBannerCollection(filteredApps, homeScreen: true)
                     .padding(.horizontal, appListGrid ? 8 : 0)
@@ -607,6 +614,38 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
+    }
+
+    private var homeScreenWidgets: some View {
+        HStack(spacing: 8) {
+            if showHomeClockWidget {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.date.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 25, weight: .semibold, design: .rounded))
+                        Text(context.date.formatted(date: .complete, time: .omitted))
+                            .font(.system(size: 12, weight: .medium))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+            }
+
+            if showHomeAppCountWidget {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(sharedModel.apps.count)")
+                        .font(.system(size: 25, weight: .semibold, design: .rounded))
+                    Text("Installed apps")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+                .padding(.horizontal, 14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+        .foregroundStyle(.white)
     }
 
     @ViewBuilder
