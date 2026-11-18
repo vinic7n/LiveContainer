@@ -612,11 +612,22 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             }
         }
             .onDrag {
-                draggedHomeAppID = sharedAppSortManager.getUniqueIdentifier(for: app)
-                let data = Data((draggedHomeAppID ?? "").utf8) as NSData
-                return NSItemProvider(item: data, typeIdentifier: UTType.data.identifier)
+                guard let appID = sharedAppSortManager.getUniqueIdentifier(for: app) else {
+                    return NSItemProvider()
+                }
+
+                draggedHomeAppID = appID
+                let provider = NSItemProvider()
+                provider.registerDataRepresentation(
+                    forTypeIdentifier: UTType.plainText.identifier,
+                    visibility: .ownProcess
+                ) { completion in
+                    completion(Data(appID.utf8), nil)
+                    return nil
+                }
+                return provider
             }
-            .onDrop(of: [UTType.data], delegate: HomeAppReorderDropDelegate(
+            .onDrop(of: [UTType.plainText], delegate: HomeAppReorderDropDelegate(
                 app: app,
                 apps: pageApps,
                 manager: sharedAppSortManager,
