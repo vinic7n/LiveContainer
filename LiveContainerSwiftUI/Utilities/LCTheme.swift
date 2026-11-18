@@ -4,6 +4,7 @@ import PhotosUI
 
 enum LCTheme {
     static let homeScreenWallpaperURL = LCPath.lcGroupDocPath.appendingPathComponent("HomeScreenWallpaper.jpg")
+    static let homeScreenWidgetImageURL = LCPath.lcGroupDocPath.appendingPathComponent("HomeScreenWidget.jpg")
 
     static func color(hex: String) -> Color {
         let value = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))

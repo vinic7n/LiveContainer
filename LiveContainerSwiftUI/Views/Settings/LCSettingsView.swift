@@ -92,10 +92,14 @@ struct LCSettingsView: View {
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
-    @AppStorage("LCHomeScreenClockWidgetRows", store: LCUtils.appGroupUserDefault) private var homeClockWidgetRows = 2
+    @AppStorage("LCHomeScreenClockWidgetColumns", store: LCUtils.appGroupUserDefault) private var homeClockWidgetColumns = 4
+    @AppStorage("LCHomeScreenShowImageWidget", store: LCUtils.appGroupUserDefault) private var showHomeImageWidget = false
+    @AppStorage("LCHomeScreenImageWidgetColumns", store: LCUtils.appGroupUserDefault) private var homeImageWidgetColumns = 4
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @State private var showHomeScreenWallpaperPicker = false
+    @State private var showHomeScreenWidgetImagePicker = false
     @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
+    @State private var homeScreenWidgetImageConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWidgetImageURL.path)
     
     @AppStorage("LCSideJITServerAddress", store: LCUtils.appGroupUserDefault) var sideJITServerAddress : String = ""
     @AppStorage("LCDeviceUDID", store: LCUtils.appGroupUserDefault) var deviceUDID: String = ""
@@ -301,12 +305,38 @@ struct LCSettingsView: View {
                 Section("Widgets") {
                     Toggle("Clock widget", isOn: $showHomeClockWidget)
                     if showHomeClockWidget {
-                        Picker("Widget size", selection: $homeClockWidgetRows) {
+                        Picker("Widget size", selection: $homeClockWidgetColumns) {
                             Text("2 × 2").tag(2)
-                            Text("2 × 4").tag(4)
+                            Text("4 × 2").tag(4)
                         }
                         .pickerStyle(.segmented)
                         Text("Touch and drag the clock on the Home Screen to move it.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Photo widget") {
+                    Toggle("Show photo widget", isOn: $showHomeImageWidget)
+                    if showHomeImageWidget {
+                        Picker("Widget size", selection: $homeImageWidgetColumns) {
+                            Text("2 × 2").tag(2)
+                            Text("4 × 2").tag(4)
+                        }
+                        .pickerStyle(.segmented)
+                        Button {
+                            showHomeScreenWidgetImagePicker = true
+                        } label: {
+                            Label(homeScreenWidgetImageConfigured ? "Change widget image" : "Choose widget image", systemImage: "photo")
+                        }
+                        if homeScreenWidgetImageConfigured {
+                            Button("Remove widget image", role: .destructive) {
+                                try? FileManager.default.removeItem(at: LCTheme.homeScreenWidgetImageURL)
+                                homeScreenWidgetImageConfigured = false
+                                wallpaperRevision += 1
+                            }
+                        }
+                        Text("Drag the photo widget on the Home Screen to move it.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -620,6 +650,12 @@ struct LCSettingsView: View {
                     onCancel: {}
                 )
             }
+            .sheet(isPresented: $showHomeScreenWidgetImagePicker) {
+                LCHomeScreenWallpaperPicker(
+                    onSelect: saveHomeScreenWidgetImage,
+                    onCancel: {}
+                )
+            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .background(Color.clear)
@@ -682,6 +718,19 @@ struct LCSettingsView: View {
             )
             try jpegData.write(to: LCTheme.homeScreenWallpaperURL, options: .atomic)
             homeScreenWallpaperConfigured = true
+            wallpaperRevision += 1
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+    }
+
+    private func saveHomeScreenWidgetImage(_ image: UIImage) {
+        guard let jpegData = image.jpegData(compressionQuality: 0.9) else { return }
+        do {
+            try FileManager.default.createDirectory(at: LCPath.lcGroupDocPath, withIntermediateDirectories: true)
+            try jpegData.write(to: LCTheme.homeScreenWidgetImageURL, options: .atomic)
+            homeScreenWidgetImageConfigured = true
             wallpaperRevision += 1
         } catch {
             errorInfo = error.localizedDescription

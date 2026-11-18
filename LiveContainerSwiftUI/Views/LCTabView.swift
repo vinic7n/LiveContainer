@@ -160,6 +160,18 @@ struct LCTabView: View {
             }
 
             Button {
+                sharedModel.selectedTab = .settings
+            } label: {
+                dockAppIcon {
+                    Image("SettingsAppIcon")
+                        .resizable()
+                        .scaledToFit()
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("lc.tabView.settings".loc)
+
+            Button {
                 appListGrid.toggle()
             } label: {
                 dockAppIcon {
@@ -177,24 +189,12 @@ struct LCTabView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(appListGrid ? "Switch to list layout" : "Switch to app grid")
-
-            Button {
-                sharedModel.selectedTab = .settings
-            } label: {
-                dockAppIcon {
-                    Image("SettingsAppIcon")
-                        .resizable()
-                        .scaledToFit()
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("lc.tabView.settings".loc)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 18)
-        .frame(width: 320, height: 78)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .frame(width: 340, height: 88)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).strokeBorder(.white.opacity(0.18), lineWidth: 1))
         .frame(maxWidth: .infinity)
         .padding(.top, 5)
         .padding(.bottom, 4)
@@ -202,8 +202,8 @@ struct LCTabView: View {
 
     private func dockAppIcon<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         content()
-            .frame(width: 58, height: 58)
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .frame(width: 60, height: 60)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     

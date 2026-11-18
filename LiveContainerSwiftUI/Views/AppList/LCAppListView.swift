@@ -97,8 +97,12 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
-    @AppStorage("LCHomeScreenClockWidgetRows", store: LCUtils.appGroupUserDefault) private var homeClockWidgetRows = 2
+    @AppStorage("LCHomeScreenClockWidgetColumns", store: LCUtils.appGroupUserDefault) private var homeClockWidgetColumns = 4
     @AppStorage("LCHomeScreenClockWidgetIndex", store: LCUtils.appGroupUserDefault) private var homeClockWidgetIndex = 0
+    @AppStorage("LCHomeScreenShowImageWidget", store: LCUtils.appGroupUserDefault) private var showHomeImageWidget = false
+    @AppStorage("LCHomeScreenImageWidgetColumns", store: LCUtils.appGroupUserDefault) private var homeImageWidgetColumns = 4
+    @AppStorage("LCHomeScreenImageWidgetIndex", store: LCUtils.appGroupUserDefault) private var homeImageWidgetIndex = 4
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var homeWidgetImageRevision = 0
     @State private var draggedHomeAppID: String?
     @State private var homePageIndex = 0
     @State private var isHomeSearchVisible = false
@@ -261,7 +265,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             .onChange(of: searchContext.query) { _ in homePageIndex = 0 }
             .onChange(of: appListGrid) { _ in homePageIndex = 0 }
             .onChange(of: showHomeClockWidget) { _ in homePageIndex = 0 }
-            .onChange(of: homeClockWidgetRows) { _ in homePageIndex = 0 }
+            .onChange(of: homeClockWidgetColumns) { _ in homePageIndex = 0 }
+            .onChange(of: showHomeImageWidget) { _ in homePageIndex = 0 }
+            .onChange(of: homeImageWidgetColumns) { _ in homePageIndex = 0 }
+            .onChange(of: homeWidgetImageRevision) { _ in homePageIndex = 0 }
             
             .navigationTitle("lc.appList.myApps".loc)
             .toolbar {
@@ -508,8 +515,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     private var homePages: [[LCAppModel]] {
         guard !filteredApps.isEmpty else { return [[]] }
-        let hasWidget = showHomeClockWidget && searchContext.debouncedQuery.isEmpty
-        let firstPageCapacity = max(1, 24 - (hasWidget ? 2 * homeClockWidgetRows : 0))
+        let widgetCellCount = searchContext.debouncedQuery.isEmpty
+            ? (showHomeClockWidget ? 2 * homeClockWidgetColumns : 0) + (showHomeImageWidget ? 2 * homeImageWidgetColumns : 0)
+            : 0
+        let firstPageCapacity = max(1, 24 - widgetCellCount)
         let firstPage = Array(filteredApps.prefix(firstPageCapacity))
         let remaining = Array(filteredApps.dropFirst(firstPageCapacity))
         let laterPages = stride(from: 0, to: remaining.count, by: 24).map { start in
@@ -522,11 +531,23 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         homeScreenLargeIcons ? 86 : 100
     }
 
+    private var activeHomeWidgets: [HomeScreenWidgetPlacement] {
+        guard searchContext.debouncedQuery.isEmpty else { return [] }
+        var widgets: [HomeScreenWidgetPlacement] = []
+        if showHomeClockWidget {
+            widgets.append(HomeScreenWidgetPlacement(kind: .clock, index: homeClockWidgetIndex, columns: homeClockWidgetColumns))
+        }
+        if showHomeImageWidget {
+            widgets.append(HomeScreenWidgetPlacement(kind: .image, index: homeImageWidgetIndex, columns: homeImageWidgetColumns))
+        }
+        return widgets.sorted { $0.index < $1.index }
+    }
+
     private var homePageHeight: CGFloat {
         let page = min(max(homePageIndex, 0), homePages.count - 1)
         let layout = homeScreenGridLayout(
             for: homePages[page],
-            includesWidget: page == 0 && showHomeClockWidget && searchContext.debouncedQuery.isEmpty
+            widgets: page == 0 ? activeHomeWidgets : []
         )
         return CGFloat(layout.rowCount) * homeAppTileHeight + CGFloat(max(0, layout.rowCount - 1)) * 2 + 12
     }
@@ -696,7 +717,8 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 apps: pageApps,
                 manager: sharedAppSortManager,
                 draggedAppID: $draggedHomeAppID,
-                widgetIndex: $homeClockWidgetIndex
+                clockWidgetIndex: $homeClockWidgetIndex,
+                imageWidgetIndex: $homeImageWidgetIndex
             ))
             .transition(.scale)
     }
@@ -765,16 +787,16 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
 
     private func homeClockWidgetTile(apps: [LCAppModel]) -> some View {
-        let widget = HomeScreenClockWidget(rows: homeClockWidgetRows, tileHeight: homeAppTileHeight)
+        let widget = HomeScreenClockWidget()
         return widget
             .onDrag {
-                draggedHomeAppID = homeClockWidgetDragID
+                draggedHomeAppID = HomeScreenWidgetKind.clock.dragID
                 let provider = NSItemProvider()
                 provider.registerDataRepresentation(
                     forTypeIdentifier: UTType.plainText.identifier,
                     visibility: .ownProcess
                 ) { completion in
-                    completion(Data(homeClockWidgetDragID.utf8), nil)
+                    completion(Data(HomeScreenWidgetKind.clock.dragID.utf8), nil)
                     return nil
                 }
                 return provider
@@ -783,14 +805,40 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 apps: apps,
                 manager: sharedAppSortManager,
                 draggedAppID: $draggedHomeAppID,
-                widgetIndex: $homeClockWidgetIndex
+                widgetKind: .clock,
+                clockWidgetIndex: $homeClockWidgetIndex,
+                imageWidgetIndex: $homeImageWidgetIndex
+            ))
+    }
+
+    private func homeImageWidgetTile(apps: [LCAppModel]) -> some View {
+        HomeScreenImageWidget()
+            .onDrag {
+                draggedHomeAppID = HomeScreenWidgetKind.image.dragID
+                let provider = NSItemProvider()
+                provider.registerDataRepresentation(
+                    forTypeIdentifier: UTType.plainText.identifier,
+                    visibility: .ownProcess
+                ) { completion in
+                    completion(Data(HomeScreenWidgetKind.image.dragID.utf8), nil)
+                    return nil
+                }
+                return provider
+            }
+            .onDrop(of: [UTType.plainText], delegate: HomeClockWidgetReorderDropDelegate(
+                apps: apps,
+                manager: sharedAppSortManager,
+                draggedAppID: $draggedHomeAppID,
+                widgetKind: .image,
+                clockWidgetIndex: $homeClockWidgetIndex,
+                imageWidgetIndex: $homeImageWidgetIndex
             ))
     }
 
     private func homeScreenPage(_ apps: [LCAppModel], pageIndex: Int) -> some View {
         let layout = homeScreenGridLayout(
             for: apps,
-            includesWidget: pageIndex == 0 && showHomeClockWidget && searchContext.debouncedQuery.isEmpty
+            widgets: pageIndex == 0 ? activeHomeWidgets : []
         )
 
         return GeometryReader { geometry in
@@ -808,43 +856,56 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                 }
 
-                if let widgetCell = layout.widgetCell {
+                if let widgetCell = layout.widgetCells[.clock] {
                     homeClockWidgetTile(apps: sortedApps)
                         .frame(
-                            width: tileWidth * 2 + horizontalSpacing,
-                            height: CGFloat(homeClockWidgetRows) * homeAppTileHeight + CGFloat(max(0, homeClockWidgetRows - 1)) * 2
+                            width: tileWidth * CGFloat(homeClockWidgetColumns) + horizontalSpacing * CGFloat(homeClockWidgetColumns - 1),
+                            height: homeAppTileHeight * 2 + 2
                         )
                         .position(
-                            x: CGFloat(widgetCell.column) * (tileWidth + horizontalSpacing) + tileWidth + horizontalSpacing / 2,
-                            y: CGFloat(widgetCell.row) * (homeAppTileHeight + 2)
-                                + (CGFloat(homeClockWidgetRows) * homeAppTileHeight + CGFloat(max(0, homeClockWidgetRows - 1)) * 2) / 2
+                            x: CGFloat(widgetCell.column) * (tileWidth + horizontalSpacing)
+                                + (tileWidth * CGFloat(homeClockWidgetColumns) + horizontalSpacing * CGFloat(homeClockWidgetColumns - 1)) / 2,
+                            y: CGFloat(widgetCell.row) * (homeAppTileHeight + 2) + homeAppTileHeight + 1
+                        )
+                }
+
+                if let widgetCell = layout.widgetCells[.image] {
+                    homeImageWidgetTile(apps: sortedApps)
+                        .frame(
+                            width: tileWidth * CGFloat(homeImageWidgetColumns) + horizontalSpacing * CGFloat(homeImageWidgetColumns - 1),
+                            height: homeAppTileHeight * 2 + 2
+                        )
+                        .position(
+                            x: CGFloat(widgetCell.column) * (tileWidth + horizontalSpacing)
+                                + (tileWidth * CGFloat(homeImageWidgetColumns) + horizontalSpacing * CGFloat(homeImageWidgetColumns - 1)) / 2,
+                            y: CGFloat(widgetCell.row) * (homeAppTileHeight + 2) + homeAppTileHeight + 1
                         )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(height: CGFloat(layout.rowCount) * homeAppTileHeight + CGFloat(max(0, layout.rowCount - 1)) * 2)
+            .frame(height: CGFloat(layout.rowCount) * homeAppTileHeight + CGFloat(max(0, layout.rowCount - 1)) * 2)
     }
 
-    private func homeScreenGridLayout(for apps: [LCAppModel], includesWidget: Bool) -> HomeScreenGridLayout {
+    private func homeScreenGridLayout(for apps: [LCAppModel], widgets: [HomeScreenWidgetPlacement]) -> HomeScreenGridLayout {
         var occupiedCells = Set<Int>()
         var appCells: [Int: HomeScreenGridCell] = [:]
-        var widgetCell: HomeScreenGridCell?
+        var widgetCells: [HomeScreenWidgetKind: HomeScreenGridCell] = [:]
         var cursor = 0
-        let insertionIndex = min(max(homeClockWidgetIndex, 0), apps.count)
-        let widgetRows = min(max(homeClockWidgetRows, 2), 4)
+        let placementsByIndex = Dictionary(grouping: widgets) { min(max($0.index, 0), apps.count) }
 
         for appIndex in 0...apps.count {
-            if includesWidget && appIndex == insertionIndex {
+            for widget in placementsByIndex[appIndex] ?? [] {
                 while true {
                     let row = cursor / 4
                     let column = cursor % 4
-                    if column <= 2 {
-                        let widgetSlots = (0..<widgetRows).flatMap { rowOffset in
-                            (0..<2).map { columnOffset in (row + rowOffset) * 4 + column + columnOffset }
+                    let widgetColumns = min(max(widget.columns, 2), 4)
+                    if column + widgetColumns <= 4 {
+                        let widgetSlots = (0..<2).flatMap { rowOffset in
+                            (0..<widgetColumns).map { columnOffset in (row + rowOffset) * 4 + column + columnOffset }
                         }
                         if widgetSlots.allSatisfy({ !occupiedCells.contains($0) }) {
-                            widgetCell = HomeScreenGridCell(row: row, column: column)
+                            widgetCells[widget.kind] = HomeScreenGridCell(row: row, column: column)
                             occupiedCells.formUnion(widgetSlots)
                             cursor += 1
                             break
@@ -862,7 +923,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
 
         let rowCount = max(1, (occupiedCells.map { $0 / 4 }.max() ?? 0) + 1)
-        return HomeScreenGridLayout(appCells: appCells, widgetCell: widgetCell, rowCount: rowCount)
+        return HomeScreenGridLayout(appCells: appCells, widgetCells: widgetCells, rowCount: rowCount)
     }
 
     var JITEnablingModal : some View {
@@ -1695,7 +1756,18 @@ private struct HomeScreenAppIcon: View {
     }
 }
 
-private let homeClockWidgetDragID = "livecontainer.home-widget.clock"
+private enum HomeScreenWidgetKind: String, Hashable {
+    case clock
+    case image
+
+    var dragID: String { "livecontainer.home-widget.\(rawValue)" }
+}
+
+private struct HomeScreenWidgetPlacement {
+    let kind: HomeScreenWidgetKind
+    let index: Int
+    let columns: Int
+}
 
 private struct HomeScreenGridCell {
     let row: Int
@@ -1704,14 +1776,11 @@ private struct HomeScreenGridCell {
 
 private struct HomeScreenGridLayout {
     let appCells: [Int: HomeScreenGridCell]
-    let widgetCell: HomeScreenGridCell?
+    let widgetCells: [HomeScreenWidgetKind: HomeScreenGridCell]
     let rowCount: Int
 }
 
 private struct HomeScreenClockWidget: View {
-    let rows: Int
-    let tileHeight: CGFloat
-
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(spacing: 4) {
@@ -1767,11 +1836,41 @@ private struct HomeScreenClockWidget: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity)
-            .frame(height: CGFloat(rows) * tileHeight + CGFloat(max(0, rows - 1)) * 2)
             .foregroundStyle(.white)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.white.opacity(0.18), lineWidth: 1))
         }
+    }
+}
+
+private struct HomeScreenImageWidget: View {
+    @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var imageRevision = 0
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.ultraThinMaterial)
+                    Image(systemName: "photo")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(.white.opacity(0.18), lineWidth: 1))
+        .onAppear(perform: loadImage)
+        .onChange(of: imageRevision) { _ in loadImage() }
+    }
+
+    private func loadImage() {
+        image = UIImage(contentsOfFile: LCTheme.homeScreenWidgetImageURL.path)
     }
 }
 
@@ -1780,15 +1879,20 @@ private struct HomeAppReorderDropDelegate: DropDelegate {
     let apps: [LCAppModel]
     let manager: LCAppSortManager
     @Binding var draggedAppID: String?
-    @Binding var widgetIndex: Int
+    @Binding var clockWidgetIndex: Int
+    @Binding var imageWidgetIndex: Int
 
     func dropEntered(info: DropInfo) {
         guard let draggedAppID,
               let toID = manager.getUniqueIdentifier(for: app),
               let to = apps.firstIndex(where: { manager.matches(uniqueId: toID, app: $0) }) else { return }
 
-        if draggedAppID == homeClockWidgetDragID {
-            widgetIndex = to
+        if draggedAppID == HomeScreenWidgetKind.clock.dragID {
+            clockWidgetIndex = to
+            return
+        }
+        if draggedAppID == HomeScreenWidgetKind.image.dragID {
+            imageWidgetIndex = to
             return
         }
 
@@ -1813,13 +1917,18 @@ private struct HomeClockWidgetReorderDropDelegate: DropDelegate {
     let apps: [LCAppModel]
     let manager: LCAppSortManager
     @Binding var draggedAppID: String?
-    @Binding var widgetIndex: Int
+    let widgetKind: HomeScreenWidgetKind
+    @Binding var clockWidgetIndex: Int
+    @Binding var imageWidgetIndex: Int
 
     func dropEntered(info: DropInfo) {
         guard let draggedAppID,
-              draggedAppID != homeClockWidgetDragID,
               let appIndex = apps.firstIndex(where: { manager.matches(uniqueId: draggedAppID, app: $0) }) else { return }
-        widgetIndex = appIndex
+        if widgetKind == .clock {
+            clockWidgetIndex = appIndex
+        } else {
+            imageWidgetIndex = appIndex
+        }
     }
 
     func performDrop(info: DropInfo) -> Bool {
