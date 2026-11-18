@@ -142,6 +142,7 @@ struct LCTabView: View {
 
     private var homeDock: some View {
         HStack(spacing: 0) {
+            Spacer(minLength: 0)
             Button {
                 sharedModel.selectedTab = .settings
             } label: {
@@ -153,18 +154,15 @@ struct LCTabView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("lc.tabView.settings".loc)
+            Spacer(minLength: 0)
         }
-        .padding(8)
+        .frame(maxWidth: 280, minHeight: 66)
+        .padding(.horizontal, 10)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
         .frame(maxWidth: .infinity)
         .padding(.top, 5)
         .padding(.bottom, 4)
-        .background {
-            LCHomeScreenWallpaperView()
-                .overlay(.black.opacity(0.18))
-                .ignoresSafeArea(edges: .bottom)
-        }
     }
 
     

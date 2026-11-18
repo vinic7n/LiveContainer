@@ -541,9 +541,11 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     private var homePageHeight: CGFloat {
         let page = min(max(homePageIndex, 0), homePages.count - 1)
-        let itemCount = homePages[page].count + (page == 0 && showHomeClockWidget && searchContext.debouncedQuery.isEmpty ? 2 * homeClockWidgetRows : 0)
-        let rowCount = max(1, min(6, (itemCount + 3) / 4))
-        return CGFloat(rowCount) * homeAppTileHeight + 12
+        let layout = homeScreenGridLayout(
+            for: homePages[page],
+            includesWidget: page == 0 && showHomeClockWidget && searchContext.debouncedQuery.isEmpty
+        )
+        return CGFloat(layout.rowCount) * homeAppTileHeight + CGFloat(max(0, layout.rowCount - 1)) * 2 + 12
     }
 
     @ViewBuilder
@@ -641,19 +643,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 } else {
                     TabView(selection: $homePageIndex) {
                         ForEach(Array(pages.enumerated()), id: \.offset) { pageIndex, pageApps in
-                            LazyVGrid(columns: gridColumns, spacing: 2) {
-                                ForEach(Array(pageApps.enumerated()), id: \.element) { index, app in
-                                    if showHomeClockWidget && searchContext.debouncedQuery.isEmpty && pageIndex == 0 && homeClockWidgetIndex == index {
-                                        homeClockWidgetTile(apps: sortedApps)
-                                    }
-                                    homeAppTile(app, pageApps: sortedApps)
-                                }
-
-                                if showHomeClockWidget && searchContext.debouncedQuery.isEmpty && pageIndex == 0 && homeClockWidgetIndex >= pageApps.count {
-                                    homeClockWidgetTile(apps: sortedApps)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                            homeScreenPage(pageApps, pageIndex: pageIndex)
                             .tag(pageIndex)
                         }
                     }
@@ -824,8 +814,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
 
     private func homeClockWidgetTile(apps: [LCAppModel]) -> some View {
         let widget = HomeScreenClockWidget(rows: homeClockWidgetRows, tileHeight: homeAppTileHeight)
-        let spannedWidget = homeWidgetSpanningTwoColumns(widget)
-        return spannedWidget
+        return widget
             .onDrag {
                 draggedHomeAppID = homeClockWidgetDragID
                 let provider = NSItemProvider()
@@ -846,11 +835,82 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             ))
     }
 
-    private func homeWidgetSpanningTwoColumns<V: View>(_ content: V) -> AnyView {
-        if #available(iOS 16.0, *) {
-            return AnyView(content.gridCellColumns(2))
+    private func homeScreenPage(_ apps: [LCAppModel], pageIndex: Int) -> some View {
+        let layout = homeScreenGridLayout(
+            for: apps,
+            includesWidget: pageIndex == 0 && showHomeClockWidget && searchContext.debouncedQuery.isEmpty
+        )
+
+        return GeometryReader { geometry in
+            let horizontalSpacing: CGFloat = 8
+            let tileWidth = (geometry.size.width - horizontalSpacing * 3) / 4
+            ZStack(alignment: .topLeading) {
+                ForEach(Array(apps.enumerated()), id: \.element) { index, app in
+                    if let cell = layout.appCells[index] {
+                        homeAppTile(app, pageApps: sortedApps)
+                            .frame(width: tileWidth, height: homeAppTileHeight)
+                            .position(
+                                x: CGFloat(cell.column) * (tileWidth + horizontalSpacing) + tileWidth / 2,
+                                y: CGFloat(cell.row) * (homeAppTileHeight + 2) + homeAppTileHeight / 2
+                            )
+                    }
+                }
+
+                if let widgetCell = layout.widgetCell {
+                    homeClockWidgetTile(apps: sortedApps)
+                        .frame(
+                            width: tileWidth * 2 + horizontalSpacing,
+                            height: CGFloat(homeClockWidgetRows) * homeAppTileHeight + CGFloat(max(0, homeClockWidgetRows - 1)) * 2
+                        )
+                        .position(
+                            x: CGFloat(widgetCell.column) * (tileWidth + horizontalSpacing) + tileWidth + horizontalSpacing / 2,
+                            y: CGFloat(widgetCell.row) * (homeAppTileHeight + 2)
+                                + (CGFloat(homeClockWidgetRows) * homeAppTileHeight + CGFloat(max(0, homeClockWidgetRows - 1)) * 2) / 2
+                        )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        return AnyView(content)
+        .frame(height: CGFloat(layout.rowCount) * homeAppTileHeight + CGFloat(max(0, layout.rowCount - 1)) * 2)
+    }
+
+    private func homeScreenGridLayout(for apps: [LCAppModel], includesWidget: Bool) -> HomeScreenGridLayout {
+        var occupiedCells = Set<Int>()
+        var appCells: [Int: HomeScreenGridCell] = [:]
+        var widgetCell: HomeScreenGridCell?
+        var cursor = 0
+        let insertionIndex = min(max(homeClockWidgetIndex, 0), apps.count)
+        let widgetRows = min(max(homeClockWidgetRows, 2), 4)
+
+        for appIndex in 0...apps.count {
+            if includesWidget && appIndex == insertionIndex {
+                while true {
+                    let row = cursor / 4
+                    let column = cursor % 4
+                    if column <= 2 {
+                        let widgetSlots = (0..<widgetRows).flatMap { rowOffset in
+                            (0..<2).map { columnOffset in (row + rowOffset) * 4 + column + columnOffset }
+                        }
+                        if widgetSlots.allSatisfy({ !occupiedCells.contains($0) }) {
+                            widgetCell = HomeScreenGridCell(row: row, column: column)
+                            occupiedCells.formUnion(widgetSlots)
+                            cursor += 1
+                            break
+                        }
+                    }
+                    cursor += 1
+                }
+            }
+
+            guard appIndex < apps.count else { continue }
+            while occupiedCells.contains(cursor) { cursor += 1 }
+            appCells[appIndex] = HomeScreenGridCell(row: cursor / 4, column: cursor % 4)
+            occupiedCells.insert(cursor)
+            cursor += 1
+        }
+
+        let rowCount = max(1, (occupiedCells.map { $0 / 4 }.max() ?? 0) + 1)
+        return HomeScreenGridLayout(appCells: appCells, widgetCell: widgetCell, rowCount: rowCount)
     }
 
     var JITEnablingModal : some View {
@@ -1685,6 +1745,17 @@ private struct HomeScreenAppIcon: View {
 
 private let homeClockWidgetDragID = "livecontainer.home-widget.clock"
 
+private struct HomeScreenGridCell {
+    let row: Int
+    let column: Int
+}
+
+private struct HomeScreenGridLayout {
+    let appCells: [Int: HomeScreenGridCell]
+    let widgetCell: HomeScreenGridCell?
+    let rowCount: Int
+}
+
 private struct HomeScreenClockWidget: View {
     let rows: Int
     let tileHeight: CGFloat
@@ -1692,7 +1763,7 @@ private struct HomeScreenClockWidget: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             VStack(spacing: 4) {
-                Text(context.date.formatted(date: .complete, time: .omitted))
+                Text(context.date.formatted(.dateTime.weekday(.wide)))
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
