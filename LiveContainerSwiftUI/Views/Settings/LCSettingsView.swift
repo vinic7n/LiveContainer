@@ -33,6 +33,39 @@ enum JITEnablerType : Int, CaseIterable, Identifiable {
     }
 }
 
+private enum LCSettingsCategory: String, CaseIterable, Identifiable {
+    case general
+    case jit
+    case homeScreen
+    case storage
+    case about
+    case advanced
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "lc.common.miscellaneous".loc
+        case .jit: "JIT & Certificates"
+        case .homeScreen: "lc.settings.interface".loc
+        case .storage: "lc.settings.dataManagement".loc
+        case .about: "lc.settings.about".loc
+        case .advanced: "Advanced"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .jit: "bolt.fill"
+        case .homeScreen: "rectangle.3.group"
+        case .storage: "internaldrive"
+        case .about: "info.circle"
+        case .advanced: "slider.horizontal.3"
+        }
+    }
+}
+
 struct LCSettingsView: View {
     @State var errorShow = false
     @State var errorInfo = ""
@@ -59,7 +92,7 @@ struct LCSettingsView: View {
     @AppStorage("LCAppListGrid", store: LCUtils.appGroupUserDefault) private var appListGrid = false
     @AppStorage("LCHomeScreenLargeIcons", store: LCUtils.appGroupUserDefault) private var homeScreenLargeIcons = false
     @AppStorage("LCHomeScreenShowClockWidget", store: LCUtils.appGroupUserDefault) private var showHomeClockWidget = false
-    @AppStorage("LCHomeScreenShowAppCountWidget", store: LCUtils.appGroupUserDefault) private var showHomeAppCountWidget = false
+    @AppStorage("LCHomeScreenClockWidgetRows", store: LCUtils.appGroupUserDefault) private var homeClockWidgetRows = 2
     @AppStorage("LCHomeScreenWallpaperRevision", store: LCUtils.appGroupUserDefault) private var wallpaperRevision = 0
     @State private var showHomeScreenWallpaperPicker = false
     @State private var homeScreenWallpaperConfigured = FileManager.default.fileExists(atPath: LCTheme.homeScreenWallpaperURL.path)
@@ -81,6 +114,8 @@ struct LCSettingsView: View {
     @EnvironmentObject private var sharedModel : SharedModel
     
     @State private var isViewAppeared = false
+    @State private var selectedSettingsCategory: LCSettingsCategory?
+    @State private var settingsSearchQuery = ""
     
     let storeName = LCUtils.getStoreName()
     
@@ -92,28 +127,54 @@ struct LCSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section("LiveContainer") {
-                    if sharedModel.multiLCStatus != 2 {
-                        Button {
-                            sharedModel.selectedTab = .sources
-                        } label: {
-                            Label("lc.tabView.sources".loc, systemImage: "books.vertical")
-                        }
+                if let selectedSettingsCategory {
+                    Button {
+                        self.selectedSettingsCategory = nil
+                    } label: {
+                        Label("Settings", systemImage: "chevron.left")
+                    }
+                } else {
+                    Section {
+                        TextField("Search Settings", text: $settingsSearchQuery)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
 
-                        Button {
-                            sharedModel.selectedTab = .tweaks
-                        } label: {
-                            Label("lc.tabView.tweaks".loc, systemImage: "wrench.and.screwdriver")
+                    if sharedModel.multiLCStatus != 2 {
+                        Section("LiveContainer") {
+                            Button {
+                                sharedModel.selectedTab = .sources
+                            } label: {
+                                settingsRow(title: "lc.tabView.sources".loc, symbol: "books.vertical.fill", color: .orange)
+                            }
+                            Button {
+                                sharedModel.selectedTab = .tweaks
+                            } label: {
+                                settingsRow(title: "lc.tabView.tweaks".loc, symbol: "wrench.and.screwdriver.fill", color: .blue)
+                            }
+                        }
+                    }
+
+                    Section("Settings") {
+                        ForEach(LCSettingsCategory.allCases.filter {
+                            settingsSearchQuery.isEmpty || $0.title.localizedCaseInsensitiveContains(settingsSearchQuery)
+                        }) { category in
+                            Button {
+                                selectedSettingsCategory = category
+                            } label: {
+                                HStack(spacing: 12) {
+                                    settingsRow(title: category.title, symbol: category.symbol, color: settingsCategoryColor(category))
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
                         }
                     }
                 }
 
-                Section("Home Screen Widgets") {
-                    Toggle("Clock and date", isOn: $showHomeClockWidget)
-                    Toggle("Installed app count", isOn: $showHomeAppCountWidget)
-                }
-
-                if sharedModel.multiLCStatus != 2 {
+                if selectedSettingsCategory == .jit && sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
                             Button {
@@ -152,7 +213,7 @@ struct LCSettingsView: View {
                         Text("lc.settings.jitLessDesc".loc)
                     }
                 }
-                if (store != .Unknown && store != .ADP) || LCUtils.isAppGroupAltStoreLike() {
+                if selectedSettingsCategory == .jit && ((store != .Unknown && store != .ADP) || LCUtils.isAppGroupAltStoreLike()) {
                     Section{
                         NavigationLink {
                             LCMultiLCManagementView()
@@ -178,7 +239,7 @@ struct LCSettingsView: View {
                     }
                 }
                 
-                if #available(iOS 16.1, *) {
+                if selectedSettingsCategory == .jit, #available(iOS 16.1, *) {
                     Section {
                         NavigationLink {
                             LCMultitaskSettingView()
@@ -190,6 +251,7 @@ struct LCSettingsView: View {
                     }
                 }
                 
+                if selectedSettingsCategory == .jit {
                 Section {
                     if JITEnabler == .SideJITServer || JITEnabler == .JITStreamerEBLegacy {
                         HStack {
@@ -220,7 +282,9 @@ struct LCSettingsView: View {
                 } footer: {
                     Text("lc.settings.JitDesc".loc)
                 }
+                }
                 
+                if selectedSettingsCategory == .jit {
                 Section {
                     Picker(selection: $selected32BitEmulator) {
                         ForEach(sharedModel.arm32EmuApps, id: \.self) { app in
@@ -231,7 +295,23 @@ struct LCSettingsView: View {
                         Text("lc.settings.selected32BitEmulator".loc)
                     }
                 }
+                }
                 
+                if selectedSettingsCategory == .homeScreen {
+                Section("Widgets") {
+                    Toggle("Clock widget", isOn: $showHomeClockWidget)
+                    if showHomeClockWidget {
+                        Picker("Widget size", selection: $homeClockWidgetRows) {
+                            Text("2 × 2").tag(2)
+                            Text("2 × 4").tag(4)
+                        }
+                        .pickerStyle(.segmented)
+                        Text("Touch and drag the clock on the Home Screen to move it.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section{
                     Toggle(isOn: $appListGrid) {
                         Text("lc.theme.homeScreenLayout".loc)
@@ -282,6 +362,9 @@ struct LCSettingsView: View {
                 } footer: {
                     Text("lc.settings.dynamicColors.desc".loc)
                 }
+                }
+
+                if selectedSettingsCategory == .general {
                 Section{
                     Toggle(isOn: $frameShortIcon) {
                         Text("lc.settings.FrameIcon".loc)
@@ -317,7 +400,10 @@ struct LCSettingsView: View {
                         Text("lc.settings.strictHidingDesc".loc)
                     }
                 }
-                
+
+                }
+
+                if selectedSettingsCategory == .advanced {
                 Section {
                     Toggle(isOn: $dontSignApp) {
                         Text("lc.settings.dontSign".loc)
@@ -325,7 +411,9 @@ struct LCSettingsView: View {
                 } footer: {
                     Text("lc.settings.dontSignDesc".loc)
                 }
+                }
 
+                if selectedSettingsCategory == .storage {
                 Section {
                     Button {
                         clearNotifications()
@@ -348,7 +436,9 @@ struct LCSettingsView: View {
                         Text("lc.settings.dataManagement".loc)
                     }
                 }
+                }
                 
+                if selectedSettingsCategory == .about {
                 Section {
                     HStack {
                         Image("GitHub")
@@ -385,8 +475,9 @@ struct LCSettingsView: View {
                     .background(Color.clear)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
+                }
                 
-                if sharedModel.developerMode {
+                if selectedSettingsCategory == .advanced && sharedModel.developerMode {
                     Section {
                         Toggle(isOn: $injectToLCItelf) {
                             Text("lc.settings.injectLCItself".loc)
@@ -448,7 +539,7 @@ struct LCSettingsView: View {
             .background {
                 LCHomeScreenWallpaperView()
             }
-            .navigationBarTitle("lc.tabView.settings".loc)
+            .navigationBarTitle(selectedSettingsCategory?.title ?? "lc.tabView.settings".loc)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
@@ -544,6 +635,37 @@ struct LCSettingsView: View {
             guard sharedModel.selectedTab == .settings, let link else { return }
             sharedModel.deepLink = nil
             handleURL(url: link)
+        }
+        .onChange(of: sharedModel.selectedTab) { selectedTab in
+            if selectedTab == .settings {
+                selectedSettingsCategory = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func settingsRow(title: String, symbol: String, color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 30, height: 30)
+                .background(color, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            Text(title)
+                .foregroundStyle(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private func settingsCategoryColor(_ category: LCSettingsCategory) -> Color {
+        switch category {
+        case .general: .gray
+        case .jit: .orange
+        case .homeScreen: .blue
+        case .storage: .green
+        case .about: .indigo
+        case .advanced: .purple
         }
     }
     

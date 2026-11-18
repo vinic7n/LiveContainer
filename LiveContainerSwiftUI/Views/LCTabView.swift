@@ -141,22 +141,23 @@ struct LCTabView: View {
     }
 
     private var homeDock: some View {
-        Button {
-            sharedModel.selectedTab = .settings
-        } label: {
-            Image(systemName: "gearshape.fill")
-                .font(.system(size: 23, weight: .medium))
-                .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(
-                    LinearGradient(colors: [Color.white.opacity(0.5), Color.gray.opacity(0.78)], startPoint: .topLeading, endPoint: .bottomTrailing),
-                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
-                )
+        HStack(spacing: 0) {
+            Button {
+                sharedModel.selectedTab = .settings
+            } label: {
+                Image("SettingsAppIcon")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("lc.tabView.settings".loc)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("lc.tabView.settings".loc)
+        .padding(8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.18), lineWidth: 1))
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
         .padding(.top, 5)
         .padding(.bottom, 4)
         .background {
